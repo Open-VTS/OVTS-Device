@@ -1,0 +1,18 @@
+//OVTSProto Options
+
+center_address_struct.device_data_url max_size:128
+center_address_struct.center_commands_url max_size:128
+center_address_struct.ping_url max_size:128
+center_address_struct.device_report_url max_size:128
+
+
+center_params_struct.number1 max_size:16
+center_params_struct.number2 max_size:16
+center_params_struct.number3 max_size:16
+
+custom_struct.key max_size:64
+custom_struct.value max_size:256
+
+DeviceData.custom_field max_count:10
+CenterCommands.custom_field max_count:10
+CenterCommands.set_center_params_struct.key max_size:128

@@ -1,0 +1,32 @@
+{
+    "macros": [
+        "MBED_HEAP_STATS_ENABLED=1",
+        "MBED_STACK_STATS_ENABLED=1",
+        "MBED_MEM_TRACING_ENABLED=1"
+    ],
+    "config": {},
+    "target_overrides": {
+        "*": {
+            "platform.crash-capture-enabled": true,
+            "platform.fatal-error-auto-reboot-enabled": true,
+            "platform.error-reboot-max": 2,
+            "target.lse_available": true,
+            "rtos.main-thread-stack-size": 3584,
+            "rtos.thread-stack-size": 1536,
+            "events.shared-stacksize": 3072,
+            "drivers.uart-serial-txbuf-size": 1024,
+            "drivers.uart-serial-rxbuf-size": 1024,
+            "target.clock_source": "USE_PLL_HSE_EXTC|USE_PLL_HSI",
+            "target.macros_add": ["MBED_TICKLESS", "HSE_VALUE=8000000"],
+            "target.features_add": [
+                "STORAGE"
+            ],
+            "target.components_add": [
+                "SD"
+            ],
+            "platform.stdio-baud-rate": 115200,
+            "target.stdio_uart_tx": "PA_9",
+            "target.stdio_uart_rx": "PA_10"
+        }
+    }
+}

@@ -1,0 +1,84 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "name": "mbed",
+    "tasks": [
+        {
+            "label": "build",
+            "type": "shell",
+            "problemMatcher": {
+                "owner": "cpp",
+                "fileLocation": [
+                    "relative",
+                    "${workspaceRoot}/mbed-os"
+                ],
+                "pattern": {
+                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                }
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "args": [
+                "compile",
+                "--profile=debug",
+                "-t",
+                "GCC_ARM",
+                "-m",
+                "DISCO_F407VG"
+            ],
+            "linux": {
+                "command": "make"
+            },
+            "osx": {
+                "command": "make"
+            },
+            "windows": {
+                "command": "mbed"
+            },
+            "presentation": {
+                "echo": false,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "upload",
+            "type": "shell",
+            "command": "C:\\OpenOCD-20190210-0.10.0\\bin\\openocd.exe -f \"C:/OpenOCD-20190210-0.10.0/share/openocd/scripts/interface/stlink.cfg\" -f \"C:/OpenOCD-20190210-0.10.0/share/openocd/scripts/target/stm32f4x.cfg\" -c \"program ./BUILD/DISCO_F407VG/GCC_ARM-DEBUG/${workspaceRootFolderName}.elf verify reset exit\"",
+            "args": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": {
+                "owner": "cpp",
+                "fileLocation": [
+                    "relative",
+                    "${workspaceRoot}/mbed-os"
+                ],
+                "pattern": {
+                    // "regexp": "^(.*):(\\d+):(\\d+):\\s+(Error):\\s+(.*)$",
+                    "regexp": "^Error:.*$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                }
+            },
+            "dependsOn": [
+                "build"
+            ],
+        }
+    ]
+}

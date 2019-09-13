@@ -1,0 +1,169 @@
+/*
+* Open OVTS Project
+* Message Structure for ProtoBuf
+*/
+syntax = "proto2";
+
+
+//custom param
+message custom_struct {
+    required string key = 1;
+    required string value = 2;
+}
+
+// All timers for Device
+message device_timer_struct {
+    // interval for sending DeviceData to center
+    required int32 network_send = 1;
+    // interval for getting center_commands from center
+    required int32 network_receive = 2;
+    // interval for send sms to center
+    required int32 sms_send = 3;
+}
+
+// an struct to choose which data that should be send to center as DeviceData
+// 0:default (No change), 1: enable, otherwise: disable
+message device_data_select_struct {
+    //Location for gps
+    required int32 gps_enable = 1;
+    // imu Gyro Data
+    required int32 imu_enable = 2;
+    // OUPUT Relay
+    required int32 relay_enable = 3;
+    // Digital INPUT
+    required int32 input_sensor_enable = 4;
+    // simcharge value
+    required int32 sim_balance_enable = 5;
+    // battery status
+    required int32 battery_enable = 6;
+    // signal quality enable
+    required int32 signal_quality_enable = 7;
+}
+
+// device params
+message device_params_struct {
+    required device_timer_struct timer = 1;
+    //select which data to send
+    required device_data_select_struct data_select = 2;
+    // choose type of connection
+    // 1:Network, 2:SMS, 3:Both
+    required int32 connection_type = 3;
+}
+
+// center address
+message center_address_struct {
+    // address for sending DeviceData
+    required string device_data_url = 1;
+    // address for getting center commands
+    required string center_commands_url = 2;
+    // address for getting center commands
+    required string device_report_url = 3;
+    // center ping url
+    required string ping_url = 4;
+}
+
+// center params
+message center_params_struct {
+    optional center_address_struct center_address = 1;
+    required string number1 = 2;
+    optional string number2 = 3;
+    optional string number3 = 4;
+}
+
+// structor message for DeviceData
+message DeviceData {
+    // data structures
+    message imu_data_struct {
+        required float ax = 1;
+        required float ay = 2;
+        required float az = 3;
+        required float gx = 4;
+        required float gy = 5;
+        required float gz = 6;
+        required float mx = 7;
+        required float my = 8;
+        required float mz = 9;
+    }
+
+    // location
+    message gps_data_struct {
+        required float lat = 1;
+        required float lng = 2;
+        required double speed = 3;
+        required double altitude = 4;
+        required double course = 5;
+        required double hdop = 6;
+    }
+
+    // battery status
+    message battery_struct{
+        required float capacity = 1;
+        // 0:default (No change), 1: enable, otherwise: disable
+        required int32 plugged = 2;
+    }
+    
+    //Device ID XX XXXX
+    required int32 device_id = 1;
+    //Time as timestamp
+    required int64 time = 2;
+    //Location for gps
+    optional gps_data_struct gps_data = 3;
+    // imu Gyro Data
+    optional imu_data_struct imu_data = 4;
+    // OUPUT Relay
+    // 0:default (No change), 1: turn on, otherwise: turn off
+    optional int32 relay = 5;
+    // Digital INPUT
+    // 0:default (No change), 1: enable, otherwise: disable
+    optional int32 input_sensor = 6;
+    // simcharge value
+    optional int32 sim_balance = 7;
+    // battery status
+    optional battery_struct battery_data = 8;
+    // battery status
+    optional int32 signal_quality = 9;
+    // center parameters
+    optional center_params_struct center_params = 10;
+    // device parameters
+    optional device_params_struct device_params = 11;
+    // optional param (custom)
+    repeated custom_struct custom_field = 12;
+    // // test param
+    // repeated string test = 12;
+}
+
+
+// structor message for Device Commands comming from center
+message CenterCommands {
+    // device report
+    // two stamptime for start and end
+    message report_struct {
+        required int64 start = 1;
+        required int64 end = 2;
+    }
+    //sleep timer
+    message sleep_struct {
+        required int64 start = 1;
+        required int64 end = 2;
+    }
+
+    //set center parameters
+    message set_center_params_struct {
+        required string key = 1;
+        required center_params_struct center_params = 2;
+    }
+
+    //Device ID XX XXXX
+    required int32 device_id = 1;
+    //SET CENTER PARAMS
+    optional set_center_params_struct set_center_params =2;
+    optional device_params_struct device_params = 3;
+    optional report_struct device_report = 4;
+    optional sleep_struct device_sleep = 5;
+    optional int32 relay = 6;
+    // optional param (custom)
+    repeated custom_struct custom_field = 7;
+}
+
+//...
+
