@@ -58,14 +58,6 @@ OVTS-Device is the device application of [OVTS](https://github.com/Open-VTS) pro
 * Works with any
 * Software environment fully based on VSCode IDE with configs to generate and debug code.
 
-## TODO
-
-* Add more secure protocols like HTTPS.
-* Add request report file and remove auto send the report on device.
-* Improve source code and documentation.
-* A 3D printed layout box for the device.
-* Improve README file for better understanding.
-
 ## Usage
 
 For a basic setup you need at least one working device and the [OVTS-Server](https://github.com/Open-VTS/OVTS-Server).
@@ -120,7 +112,15 @@ The workspace is compatible with VSCode and has the ability to directly compile 
 * Connect a serial-to-USB cable to header `P5` and see the output on a serial monitor app.
 * If you still have other issues you can create a new issue.
 * The project has built and tested with `mbed-os v5.13.0` and should work with the most recent version.
-  
+
+## TODO
+
+* Add more secure protocols like HTTPS.
+* Add request report file and remove auto send the report on device.
+* Improve source code and documentation.
+* A 3D printed layout box for the device.
+* Improve README file for better understanding.
+
 ## Some open-source projects that have been used in this project
 
 * [ARM mbed-os](https://github.com/ARMmbed/mbed-os)
