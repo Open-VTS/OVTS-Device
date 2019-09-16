@@ -19,7 +19,7 @@ The project consists of four separate repositories:
 
 OVTS-Device is the device application of [OVTS](https://github.com/Open-VTS) project. This repo contains device application and hardware schematics and PCB gerber files for device manufacturing.
 
-![OVTS Device](./screenshots/board-3d.png)
+<img src="./images/board-3d.png" width="500"/>
 
 ## OVTS-Device Features
 
