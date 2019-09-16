@@ -1,12 +1,14 @@
-# OVTS Overview
+# Open Vehicle Tracking System
 
-![OVTS](./screenshots/banner.png)
+![OVTS](./images/banner.png)
+
+## OVTS Overview
 
 [OVTS](https://github.com/Open-VTS) is an Open-source Vehicle Tracking System project based on GPS. It can track the device based on GPS data and send information to the main server (AKA Center). It can be mounted on a car or any other vehicles. The communication is over on GPRS and SMS. The device has other features like output relay, input voltage sensor, IMU sensor, etc. This project covers **Device-side**, **Server-side** and a **User Panel**.
 
 This project is open source and is independent on **ANY ONLINE SERVICES**.
 
-There are four parts for the projects in separate repositories:
+The project consists of four separate repositories:
 
 * [OVTS-Device](https://github.com/Open-VTS/OVTS-Device)
 * [OVTS-Server](https://github.com/Open-VTS/OVTS-Server)
@@ -15,7 +17,7 @@ There are four parts for the projects in separate repositories:
 
 ## OVTS-Device
 
-OVTS-Device is the device application of [OVTS](https://github.com/Open-VTS) project. This repo contains device source code and hardware schematics and PCB files.
+OVTS-Device is the device application of [OVTS](https://github.com/Open-VTS) project. This repo contains device application and hardware schematics and PCB gerber files for device manufacturing.
 
 ![OVTS Device](./screenshots/board-3d.png)
 
@@ -64,17 +66,18 @@ OVTS-Device is the device application of [OVTS](https://github.com/Open-VTS) pro
 * A 3D printed layout box for the device.
 * Improve README file for better understanding.
 
-## How to Use
+## Usage
 
-For using this project you need at least one working device and a server application.
+For a basic setup you need at least one working device and the [OVTS-Server](https://github.com/Open-VTS/OVTS-Server).
 
 ### Requirements
 
-* Assembled on board.
-  * The required parts for the device are listed in BOM in [Circuit]().
-  * The PCB and schematic files can be found in [Circuit]().
+* An assembled board.
+  * The required parts for the device are listed in BOM in [OVTS_Device_BOM.xlsx](./manufacturing/OVTS_Device_BOM.xlsx).
+  * Schematic can be found in [OVTS_Device_Schematic.pdf](./manufacturing/OVTS_Device_Schematic.pdf).
+  * PCB Gerber file in [OVTS_Device_Gerber.Cam](./manufacturing/OVTS_Device_Gerber.Cam)
 * An STM32 programmer (like stlink).
-* GSM Antenna (external and PCB antenna)
+* GSM Antenna (external and PCB antenna).
 * GPS Active Antenna.
 * CR1220 Coin battery.
 * A Dedicated Server.
