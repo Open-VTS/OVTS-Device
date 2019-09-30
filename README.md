@@ -23,19 +23,19 @@ OVTS-Device is the device application of [OVTS](https://github.com/Open-VTS) pro
 
 ## OVTS-Device Features
 
-* Small Dimensions about 80mm x 58mm x 6mm (HWD).
+* Small Dimensions 80mm x 58mm x 6mm (HWD).
 * High processing power based on ARM Cortex-M4 STM32F407.
-* Communication over HTTP and SMS message and both (DUAL Mode).
-* Internal report system.
-* Wide input voltage range from 9V to 36V.
-* Nine-Axis (Gyro + Accelerometer + Compass) IMU Device.
+* Communication over HTTP, SMS message and both (DUAL Mode).
+* Internal reporting system.
+* Wide supply voltage range from 9V to 36V.
+* Nine-Axis (Gyro + Accelerometer + Compass) IMU sensor.
 * Built-in relay to turn on/off the vehicle or other devices.
-* Input voltage sensor to detect vehicle start/stop.
+* Input voltage sensor to detect vehicle start mechanism.
 * Built-in RTC (Real Time Clock).
-* Builtin SDCard for saving reports.
-* Built-in Lithium battery with onboard charger (lasts about 6Hours).
+* Builtin SDCard.
+* Built-in Lithium battery with onboard charger (lasts about 6 Hours).
 * Sleep mode to save power.
-* Audio Jack for phone communication (in progress).
+* Audio Jack for sound communication (in progress).
 * Expansion onboard headers for further developments.
 * Totally open source based on ARM mbed framework.
 * Robust circuit and PCB design.
