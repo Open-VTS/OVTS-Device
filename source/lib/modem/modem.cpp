@@ -250,7 +250,7 @@ std::string Modem::read_until(const char *value, int timeout)
 }
 
 /*
-* (There is a bug with Quectel MC60 which failed the http response and answer the failed response for a long time (approx 180 sec))
+* (There is a bug with Quectel MC60 which fails the http response and answer the failed response for a long time (approx 180 sec))
 * Read serial until specific std::string for long time responds ), it also check for error value
 */
 int Modem::read_until_forever(const char *value, const char *error, float read_until_forever_timeout)
@@ -421,7 +421,7 @@ int Modem::balance(void)
             return balance;
         }
     }
-    else if (_current_op == OP_MTN) //MCI
+    else if (_current_op == OP_MCI) //MCI
     {
     }
     //Rightell
@@ -745,7 +745,7 @@ bool Modem::gps_turn_off(void)
 }
 
 /*
-* CHECK timezone for Daylight Saving Time (DST)
+* Check timezone for Daylight Saving Time (DST)
 */
 bool Modem::IsDST(int month, int day)
 {
