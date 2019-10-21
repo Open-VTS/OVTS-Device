@@ -22,7 +22,7 @@ Modem::Modem(PinName Tx, PinName Rx, PinName GPS_Tx, PinName GPS_Rx, PinName pw,
 
 #else
 /*
-* Destructor
+* Constructor for All in one mode
 */
 Modem::Modem(PinName Tx, PinName Rx, PinName pw, PinName sw) : modem_serial(Tx, Rx), _power(pw), _switch(sw)
 {
@@ -32,7 +32,7 @@ Modem::Modem(PinName Tx, PinName Rx, PinName pw, PinName sw) : modem_serial(Tx, 
 #endif
 
 /*
-* Constructor for All in one mode
+* Destructor
 */
 Modem::~Modem()
 {
