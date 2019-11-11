@@ -106,7 +106,7 @@
 // send reports counter (based on write interval)
 #define REPORTS_SEND_COUNTER 400
 
-#define MAX_BUFFSIZE 512 //maximum b64 buffersize
+#define MAX_BUFFSIZE 1024 //maximum b64 buffersize
 
 // max timeout for init if timer reached and init failed it would reboot system
 #define INIT_TIMEOUT 300

@@ -176,7 +176,7 @@ int Connection::send_device_data_http(const char *url, const char *body, int tim
 int Connection::send_device_data(const char *url, const char *number, int connection_type, DeviceData *device_data, int timeout)
 {
     int result = 0;
-    char *body = new char[MAX_BUFFSIZE]();
+    char *body = new char[MAX_BUFFSIZE + 128]();
     if (devicedata_generator(device_data, body))
     {
         // printf("body: %s\r\n", body);
