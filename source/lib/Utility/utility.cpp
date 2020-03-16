@@ -23,10 +23,10 @@ void Utility::removeSubstr(char *s, const char *toremove)
 
 std::string Utility::read_between_quotes(std::string input)
 {
-    unsigned int pos = input.find("\"");
+    size_t pos = input.find("\"");
     if (pos == std::string::npos)
         return "";
-    unsigned int pos2 = input.find("\"", pos + 1);
+    size_t pos2 = input.find("\"", pos + 1);
     if (pos2 == std::string::npos)
         return "";
     return input.substr(pos + 1, pos2 - pos - 1);

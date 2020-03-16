@@ -11,18 +11,17 @@
 /*
 * Constructor for standalone mode
 */
-Modem::Modem(PinName Tx, PinName Rx, PinName GPS_Tx, PinName GPS_Rx, PinName pw, PinName sw, const double hdop_threshold) : modem_serial(Tx, Rx, 115200), parser(&modem_serial), gps_serial(GPS_Tx, GPS_Rx, 115200), _power(pw), _switch(sw)
+Modem::Modem(PinName Tx, PinName Rx, PinName GPS_Tx, PinName GPS_Rx, PinName pw, PinName sw, const double hdop_threshold) : modem_serial(Tx, Rx, 115200), parser(&modem_serial, "\r\n"), gps_serial(GPS_Tx, GPS_Rx, 115200), _power(pw), _switch(sw)
 {
     _hdop_threshold = hdop_threshold;
     // parser.debug_on(1);
-    parser.set_delimiter("\r\n");
-    parser.set_timeout(default_timeout);
+    parser.set_timeout(parser_default_timeout);
     gps_stream = fdopen(&gps_serial, "w+");
 }
 
 #else
 /*
-* Constructor for All in one mode
+* Destructor
 */
 Modem::Modem(PinName Tx, PinName Rx, PinName pw, PinName sw) : modem_serial(Tx, Rx), _power(pw), _switch(sw)
 {
@@ -32,7 +31,7 @@ Modem::Modem(PinName Tx, PinName Rx, PinName pw, PinName sw) : modem_serial(Tx, 
 #endif
 
 /*
-* Destructor
+* Constructor for All in one mode
 */
 Modem::~Modem()
 {
@@ -48,6 +47,7 @@ void Modem::power_on(void)
     _switch = 1;
     wait_ms(1100);
     _switch = 0;
+    wait_ms(1000);
 }
 
 /*
@@ -60,6 +60,27 @@ void Modem::power_off(void)
     _switch = 0;
     wait_ms(100);
     _power = 0;
+}
+
+/*
+* Reboot Modem
+*/
+void Modem::reboot(void)
+{
+    power_off();
+    wait_ms(100);
+    power_on();
+}
+
+void Modem::soft_reboot(void)
+{
+    parser.send("AT+QPOWD=0");
+    check_for_respond();
+    wait_ms(200);
+    _switch = 1;
+    wait_ms(1100);
+    _switch = 0;
+    wait_ms(1000);
 }
 
 /*
@@ -82,50 +103,76 @@ bool Modem::ping(void)
 /*
 * Check modem network status
 */
-bool Modem::check_gsm_status(void)
+/*
+bool Modem::check_gsm_status(int count)
 {
-    const float timeout = 20.0f;
-    bool res = false;
-    std::string respond, temp;
-    Timer timer;
-    timer.start();
-    float start = timer.read();
-    while (timer.read() - start < timeout)
+    for (int i=0;i<count; i++)
     {
         parser.send("AT+QNSTATUS");
-        if (check_for_respond("+QNSTATUS: 0\r\nOK"))
+        if (check_for_respond("+QNSTATUS: 0\r\nOK", 100))
         {
-            res = true;
-            break;
+            return true;
         }
-        wait_ms(200);
+        wait_ms(1000);
     }
-    timer.stop();
-    return res;
+    return false;
+}
+*/
+
+bool Modem::check_gsm_status(void)
+{
+    // check default home network
+    parser.send("AT+CGREG?");
+    std::string resp = read_until();
+    if ((resp.find("+CGREG: 0,1") != std::string::npos) || (resp.find("+CGREG: 0,5") != std::string::npos))
+        return true;
+}
+
+bool Modem::check_sim_status(void)
+{
+    parser.send("AT+CPIN?");
+    return check_for_respond(5000);
+}
+
+/*
+* Reinitialize modem
+*/
+bool Modem::reinit(void)
+{
+    // soft_reboot();
+    reboot();
+    while (!ping())
+        ;
+    while (!init())
+        ;
+    while (!init_network())
+        ;
+    return true;
 }
 
 /*
 * Initialize modem
 */
-bool Modem::init_modem(void)
+bool Modem::init(void)
 {
     if (!check_gsm_status())
+    {
+        // printf("GSM Status Failed\r\n");
         return false;
-
+    }
     //put some delay to make sure op can set
     wait_ms(200);
     if (!set_operator())
     {
-        printf("set op failed\r\n");
         return false;
     }
     wait_ms(200);
-
     if (!set_params())
     {
         printf("set params failed\r\n");
-        return false;
+        // return false;
     }
+    wait_ms(200);
     return true;
 }
 
@@ -135,8 +182,8 @@ bool Modem::init_modem(void)
 bool Modem::set_operator(void)
 {
     parser.send("AT+COPS?");
-    std::string respond = read_until("OK", 2000);
-    // printf("OP: %s\r\n", respond.c_str());
+    std::string respond = read_until();
+    // printf("OP: %s|\r\n", respond.c_str());
     if (respond.find(OP_MTN) != std::string::npos)
     {
         _current_op = OP_MTN;
@@ -174,7 +221,8 @@ bool Modem::set_params(void)
     {
         return true;
     }
-    else if (_current_op == OP_MCI)
+    //setting language to EN for MCI
+    else if (_current_op == OP_MCI && (!ussd("*198*2#").empty()))
         return true;
     return false;
 }
@@ -185,111 +233,136 @@ bool Modem::set_params(void)
 bool Modem::check_for_respond(const char *value, int timeout)
 {
     parser.set_timeout(timeout);
-    if (parser.recv(value))
-    {
-        parser.set_timeout(default_timeout);
-        return true;
-    }
-    else
-    {
-        parser.set_timeout(default_timeout);
-        return false;
-    }
+    bool res = parser.recv(value);
+    parser.set_timeout(parser_default_timeout);
+    return res;
 }
 
-/*
-* Check a desirable respond from modem after sending a command (print respond)
-*/
-bool Modem::check_for_respond_fragmented(const char *value, int timeout)
+int Modem::check_for_respond_w_err(const char *resp, const char *error, int timeout)
 {
-    std::string respond = read_until(value, timeout);
-    if (respond.find(value) != std::string::npos)
-        return true;
-    else
+    Timer timer;
+    int res = 0;
+    int ch = 0;
+    timer.start();
+    std::string respond = "";
+    float start = timer.read();
+    while (timer.read_ms() - start < timeout)
     {
-        printf("fragment respond: %s\r\n", respond.c_str());
-        return false;
+        if (respond.find(resp) != std::string::npos)
+        {
+            res = 1;
+            break;
+        }
+        else if (respond.find(error) != std::string::npos)
+        {
+            // continue reading error
+            while ((ch = parser.getc()) != EOF)
+                respond.push_back(ch);
+            printf("CHECK FOR RESPOND ERROR: %s\r\n", respond.c_str());
+            res = -1;
+            break;
+        }
+        if ((ch = parser.getc()) != EOF)
+            respond.push_back(ch);
     }
+    if (res == 0)
+        printf("CHECK FOR RESPOND TIMEOUT! \"%s\"\r\n", respond.c_str());
+    timer.stop();
+    flush();
+    return res;
+}
+
+void Modem::test_socket(void)
+{
+    printf("264\r\n");
+    // init_network();
+    parser.send("AT+QIMUX=1");
+    printf("267: %d\r\n", check_for_respond(2000));
+    parser.send("AT+QIOPEN=1,\"TCP\",\"X.X.X.X\",8080");
+    printf("269: %d\r\n", check_for_respond(OK, 20000));
+    wait_ms(500);
+    // parser.send("AT+QISEND=1,5");
+    // printf("272: %s\r\n", check_for_respond_w_err("1, CONNECT OK", "ERROR", 40000));
+    parser.send("AT+QISEND");
+    wait(1);
+    flush();
+    parser.send("hello");
+    char ctrlZ[2] = {0x1a, 0x00};
+    parser.send(ctrlZ);
+    printf("273: %d\r\n", check_for_respond("CONNECT OK", 40000));
+    parser.send("AT+QICLOSE=1");
+}
+
+void Modem::test()
+{
+    while (!init())
+        ;
+    while (!init_network())
+        ;
+    printf("res: %s\r\n", http_get("https://185.153.185.219", 5000).c_str());
+    printf("Test Done\r\n");
 }
 
 /*
 * Check std::string ends with another std::string
 */
-bool hasEnding(std::string const &fullString, std::string const &ending)
+bool Modem::hasEnding(std::string const &fullString, std::string const &ending)
 {
     if (fullString.length() >= ending.length())
     {
         return (0 == fullString.compare(fullString.length() - ending.length(), ending.length(), ending));
     }
-    else
-    {
-        return false;
-    }
+    return false;
 }
 
 /*
 * Read serial until specific std::string
 */
+
 std::string Modem::read_until(const char *value, int timeout)
 {
     std::string respond = "";
-    char ch[2] = {};
+    int ch = 0;
     Timer timer;
     timer.start();
     int start = timer.read_ms();
     while ((timer.read_ms() - start < timeout) && (!hasEnding(respond, value)))
     {
-        if (parser.read(ch, 1) > 0)
-        {
-            ch[1] = '\0';
-            respond.append(ch);
-        }
+        if ((ch = parser.getc()) != EOF)
+            respond.push_back(ch);
+        wait_us(100);
     }
     timer.stop();
-    return respond;
+    flush();
+    if (hasEnding(respond, value))
+        return respond;
+    else if (respond.length())
+        printf("Failed read until: \"%s\"\r\n", respond.c_str());
+    return "";
 }
 
 /*
-* (There is a bug with Quectel MC60 which fails the http response and answer the failed response for a long time (approx 180 sec))
-* Read serial until specific std::string for long time responds ), it also check for error value
-*/
-int Modem::read_until_forever(const char *value, const char *error, float read_until_forever_timeout)
+std::string Modem::read_until(const char *value, int timeout)
 {
-    int result = 0;
-    bool timeout = false;
+    std::string respond = "";
     Timer timer;
-    // char buffer[max_buffer_size];
-    char *buffer = new char[64]();
     timer.start();
-    float start = timer.read();
-    while ((timer.read() - start < read_until_forever_timeout))
+    int start = timer.read_ms();
+    char *buffer = new char[max_buffer_size]();
+    while ((timer.read_ms() - start < timeout) && (!hasEnding(respond, value)))
     {
         if (parser.recv("%[^\n]%*c", buffer))
         {
-            if (strstr(buffer, value) != NULL)
-            {
-                result = 1;
-                timeout = true;
-                break;
-            }
-            else if (strstr(buffer, error) != NULL)
-            {
-                printf("Read Until Forever ERROR: %s\r\n", buffer);
-                wait_ms(10);
-                result = 0;
-                timeout = true;
-                break;
-            }
-            strcat(buffer, "\n");
+            respond.append(buffer);
+            respond.append("\r\n");
         }
     }
+    flush();
     timer.stop();
     delete[] buffer;
-    flush();
-    if (!timeout)
-        printf("Read Until Forever TIMEOUT!\r\n");
-    return result;
+    return respond;
 }
+*/
 
 /*
 * Send SMS
@@ -301,7 +374,7 @@ bool Modem::send_sms(const char *number, const char *msg)
     wait_ms(100);
     parser.send(msg);
     parser.send(ctrlZ);
-    return check_for_respond("OK\r\n", 30000);
+    return check_for_respond(30000);
 }
 
 /*
@@ -314,10 +387,10 @@ double_string Modem::read_sms(int index)
     std::string _buffer = read_until();
     // printf("Here: %s\r\n", _buffer.c_str());
     //find number
-    unsigned int pos1 = _buffer.find("\",\"");
+    size_t pos1 = _buffer.find("\",\"");
     if (pos1 == std::string::npos)
         return out;
-    unsigned int pos2 = _buffer.find("\",\"", pos1 + 1);
+    size_t pos2 = _buffer.find("\",\"", pos1 + 1);
     if (pos2 == std::string::npos)
         return out;
     out.a = _buffer.substr(pos1 + 3, pos2 - pos1 - 3);
@@ -344,7 +417,7 @@ int Modem::check_message(int *output, int size)
 {
     parser.send("AT+CMGL=\"REC UNREAD\"");
     // parser.send("AT+CMGL=\"REC READ\"");
-    std::string resp = read_until("OK\r\n", 5000);
+    std::string resp = read_until(OK, 5000);
     // printf("resp: %s\r\n", resp.c_str());
     int i = 0, j = 0, cnt = 0;
     std::string::size_type pos;
@@ -384,8 +457,8 @@ bool Modem::check_inbox_full(int threshold)
 {
     parser.send("AT+CPMS?");
     std::string _buffer = read_until();
-    unsigned int pos = _buffer.find(",");
-    unsigned int pos2 = _buffer.find(",15,\"SM\"");
+    size_t pos = _buffer.find(",");
+    size_t pos2 = _buffer.find(",15,\"SM\"");
     ;
     int number = 0;
     if ((pos != std::string::npos) && (pos2 != std::string::npos))
@@ -405,14 +478,14 @@ bool Modem::check_inbox_full(int threshold)
 int Modem::balance(void)
 {
     int balance = -1;
-    // check operator
+    //check operator
     if (_current_op == OP_MTN) //Irancell
     {
         std::string respond = ussd("*555*1*2#");
         if (respond.empty())
             return balance;
-        unsigned int pos = respond.find("is ");
-        unsigned int pos2 = respond.find(" Rials");
+        size_t pos = respond.find("is ");
+        size_t pos2 = respond.find(" Rials");
         // printf("pos: %d, pos2: %d\r\n", pos, pos2);
         if ((pos != std::string::npos) && (pos2 != std::string::npos))
         {
@@ -423,10 +496,41 @@ int Modem::balance(void)
     }
     else if (_current_op == OP_MCI) //MCI
     {
+        std::string respond = ussd("*140*11#");
+        if (respond.empty())
+            return balance;
+        size_t pos = respond.find("is ");
+        size_t pos2 = respond.find(" Rial");
+        // printf("pos: %d, pos2: %d\r\n", pos, pos2);
+        if ((pos != std::string::npos) && (pos2 != std::string::npos))
+        {
+            pos = pos + 3;
+            balance = atoi(respond.substr(pos, pos2 - pos).c_str());
+            return balance;
+        }
     }
     //Rightell
 
     return balance;
+}
+
+/*
+* Read IMSI of SIMCard
+*/
+std::string Modem::read_imsi(void)
+{
+    std::string respond = "";
+    parser.send("AT+CIMI");
+    respond = read_until();
+    size_t pos = respond.find("AT+CIMI");
+    size_t pos2 = respond.find("\r\nOK");
+    // printf("pos: %d, pos2: %d\r\n", pos, pos2);
+    if ((pos != std::string::npos) && (pos2 != std::string::npos))
+    {
+        pos = pos + 10;
+        return respond.substr(pos, pos2 - pos - 1);
+    }
+    return "";
 }
 
 /*
@@ -435,29 +539,34 @@ int Modem::balance(void)
 std::string Modem::ussd(const char *code, int timeout)
 {
     std::string buffer;
-    unsigned int pos = 0;
-    unsigned int pos2 = 0;
+    size_t pos = 0;
+    size_t pos2 = 0;
     parser.send("AT+CUSD=1,\"%s\"", code);
     buffer = read_until("\r\nOK", timeout);
     if (buffer.empty())
         return "";
     // printf("buffer: %s\r\n", buffer.c_str());
-    //std::string encoding
     if (buffer.find("+CUSD: 2") != std::string::npos)
     {
-        pos = buffer.find("+CUSD:") + 10;
+        pos = buffer.find("+CUSD:");
         pos2 = buffer.find("\",15");
         // printf("pos: %d, pos2: %d\r\n", pos, pos2);
         if ((pos != std::string::npos) && (pos2 != std::string::npos))
+        {
+            pos = pos + 10;
             return buffer.substr(pos, pos2 - pos);
+        }
     }
     else if (buffer.find("+CUSD: 1") != std::string::npos)
     {
-        pos = buffer.find("+CUSD:") + 10;
+        pos = buffer.find("+CUSD:");
         pos2 = buffer.find("\",72");
         // printf("pos: %d, pos2: %d\r\n", pos, pos2);
         if ((pos != std::string::npos) && (pos2 != std::string::npos))
+        {
+            pos = pos + 10;
             return buffer.substr(pos, pos2 - pos);
+        }
     }
     return "";
 }
@@ -467,24 +576,40 @@ std::string Modem::ussd(const char *code, int timeout)
 */
 bool Modem::init_network(void)
 {
+    init_network_qideact();
     parser.send("AT+QIFGCNT=0");
     if (!check_for_respond())
         return false;
-    wait_ms(100);
-    if (!set_apn())
-        return false;
-    wait_ms(100);
-    parser.send("AT+QIREGAPP");
-    return check_for_respond("OK", 4000);
-}
 
-/*
-* Initialize GPRS network connection QIACT
-*/
-bool Modem::init_network_qiact(int timeout)
-{
+    parser.send("AT+QICSGP=1");
+    if (!check_for_respond())
+        return false;
+
+    parser.send("AT+CGDCONT=1");
+    if (!check_for_respond())
+        return false;
+
+    parser.send("AT+QIMODE=0");
+    if (!check_for_respond())
+        return false;
+
+    //TODO:check this
+    parser.send("AT+QIMUX=1");
+    if (!check_for_respond())
+        return false;
+
+    parser.send("AT+QIREGAPP");
+    if (!check_for_respond(5000))
+        return false;
+
     parser.send("AT+QIACT");
-    return check_for_respond("OK\r\n", timeout);
+    if (!check_for_respond(5000))
+        return false;
+
+#ifdef USE_HTTPS
+    return config_https();
+#endif
+    return true;
 }
 
 /*
@@ -492,14 +617,8 @@ bool Modem::init_network_qiact(int timeout)
 */
 bool Modem::init_network_qideact(int timeout)
 {
-    flush();
-    for (int i = 0; i < 3; i++)
-    {
-        parser.send("AT+QIDEACT");
-        if (check_for_respond("DEACT OK\r\n", timeout))
-            return true;
-    }
-    return false;
+    parser.send("AT+QIDEACT");
+    return check_for_respond("DEACT OK\r\n", timeout);
 }
 
 /*
@@ -510,25 +629,45 @@ bool Modem::set_apn(void)
     char apn[32];
     if (_current_op == OP_MTN)
     {
-#ifndef USE_CUSTOM_APN
         sprintf(apn, "AT+QICSGP=1,\"%s\"", OP_MTN_APN);
-#else
-        sprintf(apn, "AT+QICSGP=1,\"%s\"", OP_MTN_CUSTOM_APN);
-#endif
         parser.send(apn);
         return check_for_respond();
     }
     else if (_current_op == OP_MCI)
     {
-#ifndef USE_CUSTOM_APN
         sprintf(apn, "AT+QICSGP=1,\"%s\"", OP_MCI_APN);
-#else
-        sprintf(apn, "AT+QICSGP=1,\"%s\"", OP_MCI_CUSTOM_APN);
-#endif
         parser.send(apn);
         return check_for_respond();
     }
     return false;
+}
+
+/*
+* Setup HTTPS as default connection
+*/
+bool Modem::config_https(void)
+{
+    parser.send("AT+QSSLCFG=\"sslversion\",1,4");
+    if (!check_for_respond())
+        return false;
+
+    parser.send("AT+QSSLCFG=\"seclevel\",1,0");
+    if (!check_for_respond())
+        return false;
+
+    parser.send("AT+QSSLCFG=\"ignorertctime\",1");
+    if (!check_for_respond())
+        return false;
+
+    parser.send("AT+QSSLCFG=\"https\",1");
+    if (!check_for_respond())
+        return false;
+
+    parser.send("AT+QSSLCFG=\"httpsctxi\",1");
+    if (!check_for_respond())
+        return false;
+
+    return true;
 }
 
 /*
@@ -542,8 +681,8 @@ int Modem::get_signal_quality(void)
     // printf("respond: %s\r\n", respond.c_str());
     if (respond.empty())
         return -1;
-    unsigned int pos = respond.find("+CSQ: ");
-    unsigned int pos2 = respond.find(",");
+    size_t pos = respond.find("+CSQ: ");
+    size_t pos2 = respond.find(",");
     if ((pos != std::string::npos) && (pos2 != std::string::npos))
     {
         pos = pos + 6;
@@ -561,36 +700,43 @@ int Modem::get_signal_quality(void)
 */
 std::string Modem::http_get(const char *url, int timeout)
 {
+    int temp = 0;
     std::string respond;
-    parser.send("AT+QHTTPURL=%d", strlen(url));
-    if (!check_for_respond_fragmented("CONNECT", 10000))
+    parser.send("AT+QHTTPURL=%d,12", strlen(url));
+    if ((temp = check_for_respond_w_err("CONNECT", MODEM_NETWORK_ERROR, 180 * 1000)) <= 0)
     {
-        printf("fragment error\r\n");
+        printf("CONNECT ERROR!\r\n");
+        if (temp == 0)
+        {
+            printf("Rebooting...\r\n");
+            reinit();
+            printf("Done\r\n");
+        }
         return "";
     }
-    parser.send(url);
+    wait_ms(200);
+    parser.send("%s", url);
     if (!check_for_respond("OK", 2000))
     {
-        init_network_qideact();
         return "";
     }
     parser.send("AT+QHTTPGET=%d", timeout / 1000);
-    if (!read_until_forever("OK"))
+    if ((temp = check_for_respond_w_err(OK, MODEM_NETWORK_ERROR, 180 * 1000)) <= 0)
     {
-        init_network_qideact();
         return "";
     }
     parser.send("AT+QHTTPREAD=%d", timeout / 1000);
-    respond = read_until("OK\r\n", timeout);
+    respond = read_until(OK, timeout);
     //extract respond
-    unsigned int pos = respond.find("CONNECT");
-    unsigned int pos2 = respond.rfind("\r\nOK\r\n");
+    size_t pos = respond.find("CONNECT");
+    size_t pos2 = respond.rfind("\r\nOK\r\n");
     if ((pos != std::string::npos) && (pos2 != std::string::npos))
     {
         pos = pos + 9;
         respond = respond.substr(pos, pos2 - pos);
     }
-    init_network_qideact();
+    else
+        respond = "";
     return respond;
 }
 
@@ -599,24 +745,47 @@ std::string Modem::http_get(const char *url, int timeout)
 */
 std::string Modem::http_post(const char *url, const char *body, int blen, int timeout)
 {
+    // check if blen is below 29696 byte (MODEM DOESNT SUPPORT LARGER DATA)
+    if (blen > 29696)
+    {
+        printf("HTTP POST SIZE LIMIT REACHED!\r\n");
+        return "";
+    }
+    int temp = 0;
     parser.send("AT+QHTTPURL=%d", strlen(url));
-    if (!check_for_respond_fragmented("CONNECT", 10000))
+    // if (!check_for_respond("CONNECT", MODEM_NETWORK_ERROR, timeout))
+    if ((temp = check_for_respond_w_err("CONNECT", MODEM_NETWORK_ERROR, 180 * 1000)) <= 0)
     {
-        printf("fragment error\r\n");
+        printf("CONNECT ERROR!\r\n");
+        if (temp == 0)
+        {
+            printf("Rebooting...\r\n");
+            reinit();
+            printf("Done\r\n");
+        }
         return "";
     }
-    parser.send(url);
-    if (!check_for_respond("OK", 2000))
+    wait_ms(200);
+    parser.send("%s", url);
+    if (!check_for_respond("OK", 4000))
     {
-        init_network_qideact();
+        printf("URL ERROR!\r\n");
         return "";
     }
-    parser.send("AT+QHTTPPOST=%d,200,%d", ((blen > 0) ? blen : 1), timeout / 1000);
-    if (!read_until_forever("CONNECT"))
+    parser.send("AT+QHTTPPOST=%d,%d,%d", ((blen > 0) ? blen : 1), (timeout / 1000) + 2, timeout / 1000);
+    printf("619\r\n");
+    // if (!read_until_forever("CONNECT"))
+    if ((temp = check_for_respond_w_err("CONNECT", MODEM_NETWORK_ERROR, 180 * 1000)) <= 0)
     {
-        init_network_qideact();
+        if (temp == 0)
+        {
+            printf("Rebooting...\r\n");
+            reinit();
+            printf("Done\r\n");
+        }
         return "";
     }
+    wait_ms(200);
     if (blen <= HTTP_POST_SIZE_LIMIT)
     {
         if (blen > 0)
@@ -626,45 +795,60 @@ std::string Modem::http_post(const char *url, const char *body, int blen, int ti
     }
     else
     {
-        // buffer is large
+        //buffer is large
         int bytes_written = 0;
         int bb = 0;
         char *buffer = new char[HTTP_POST_CHUNK]();
+        // printf("input body_length: %d\r\n", blen);
+        // printf("FULL BODY: %d, %s\r\n", strlen(body), body);
         int buff_len = HTTP_POST_CHUNK - 1; // doesn't count terminator
-        // split body to small chunks
+        // printf("Body: ");
+        //split body to small chunks
         for (int i = 0; i < blen / buff_len; ++i)
         {
             memcpy(buffer, body + (i * buff_len), buff_len);
             bb = parser.write(buffer, HTTP_POST_CHUNK - 1);
             bytes_written += bb;
             wait_ms(CHUNK_DELAY);
+            // printf("%s\r\n", buffer);
         }
         // if there is anything left over
         if (blen % buff_len)
         {
             strcpy(buffer, body + (blen - blen % buff_len));
+            // bb = parser.printf("%s", buffer);
             bb = parser.write(buffer, blen % (HTTP_POST_CHUNK - 1));
             bytes_written += bb;
             wait_ms(CHUNK_DELAY);
+            // printf("%s\r\n", buffer);
+            // parser.send(buffer);
         }
         delete[] buffer;
+        // printf("bytes_written: %d\r\n", bytes_written);
     }
-    if (!read_until_forever("OK"))
+    printf("665\r\n");
+    wait_ms(200);
+    // if (!read_until_forever("OK"))
+    if ((temp = check_for_respond_w_err("OK", MODEM_NETWORK_ERROR, 180 * 1000)) <= 0)
     {
-        init_network_qideact();
+        if (temp == 0)
+        {
+            printf("Rebooting...\r\n");
+            reinit();
+            printf("Done\r\n");
+        }
         return "";
     }
     parser.send("AT+QHTTPREAD=%d", timeout / 1000);
-    std::string respond = read_until("OK\r\n", timeout);
+    std::string respond = read_until(OK, timeout);
     // extract respond
-    unsigned int pos = respond.find("CONNECT");
-    unsigned int pos2 = respond.rfind("\r\nOK\r\n");
+    size_t pos = respond.find("CONNECT");
+    size_t pos2 = respond.rfind("\r\nOK\r\n");
     if ((pos != std::string::npos) && (pos2 != std::string::npos))
     {
         pos = pos + 9;
         respond = respond.substr(pos, pos2 - pos);
     }
-    init_network_qideact();
     return respond;
 }
 
@@ -675,11 +859,11 @@ bool Modem::upload_file(const char *name, int size, const char *data)
 {
     parser.send("AT+QFUPL=\"%s\",%d", name, size);
     if (!check_for_respond("CONNECT", 3000))
+    {
         return false;
+    }
     parser.send(data);
-    if (!check_for_respond())
-        return false;
-    return true;
+    return check_for_respond();
 }
 
 /*
@@ -689,13 +873,15 @@ std::string Modem::download_file(const char *name)
 {
     std::string data;
     parser.send("AT+QFDWL=\"%s\"", name);
-    wait_ms(30);
-    data = read_until("\nOK");
+    wait_response;
+    data = read_until();
+    // printf("HELLO::\r\n");
+    // printf("here: %s\r\n", data.c_str());
     if (data.empty())
         return "";
     //extract data
-    unsigned int pos = data.find("CONNECT");
-    unsigned int pos2 = data.rfind("+QFDWL") - 1;
+    size_t pos = data.find("CONNECT");
+    size_t pos2 = data.rfind("+QFDWL") - 1;
     if ((pos != std::string::npos) && (pos2 != std::string::npos))
     {
         pos = pos + 9;
@@ -719,7 +905,7 @@ bool Modem::delete_file(const char *name)
 bool Modem::file_exist(const char *name)
 {
     parser.send("AT+QFLST");
-    std::string resp = read_until("OK\r\n", 3000);
+    std::string resp = read_until(OK, 3000);
     if (resp.find(name) != std::string::npos)
         return true;
     else
@@ -745,7 +931,7 @@ bool Modem::gps_turn_off(void)
 }
 
 /*
-* Check timezone for Daylight Saving Time (DST)
+* CHECK timezone for Daylight Saving Time (DST)
 */
 bool Modem::IsDST(int month, int day)
 {
@@ -800,11 +986,11 @@ time_t Modem::current_time(void)
 {
     time_t epoch = 0;
     parser.send("AT+CCLK?");
-    std::string resp = read_until("OK\r\n");
+    std::string resp = read_until();
     // printf("Time: %s\r\n", resp.c_str());
     // extract time std::string
-    unsigned int pos = resp.find("+CCLK: \"");
-    unsigned int pos2 = resp.rfind("\"\r\n");
+    size_t pos = resp.find("+CCLK: \"");
+    size_t pos2 = resp.rfind("\"\r\n");
     if ((pos != std::string::npos) && (pos2 != std::string::npos))
     {
         std::string time_str = resp.substr(pos + 8, pos2 - pos - 11);
@@ -910,7 +1096,7 @@ double Modem::speed_calc(std::vector<double> speeds)
 */
 gps_data Modem::get_gps_data_fix(gps_data *loc)
 {
-    const int count = 5;
+    const int count = 3;
     const int duration = 512;
     const int default_value = -1;
     double minimum_hdop = _hdop_threshold;
@@ -994,12 +1180,12 @@ std::string Modem::get_nmea(void)
 {
     std::string respond;
     parser.send("AT+QGNSSRD?");
-    respond = read_until("OK", 1000);
+    respond = read_until();
     if (respond.find("ERROR") != std::string::npos)
         return "";
     flush();
-    unsigned int pos = respond.find("$GNRMC");
-    unsigned int pos2 = respond.find("\nOK") - 1;
+    size_t pos = respond.find("$GNRMC");
+    size_t pos2 = respond.find("\nOK") - 1;
     if ((pos != std::string::npos) && (pos2 != std::string::npos))
         return respond.substr(pos, pos2 - pos);
     else

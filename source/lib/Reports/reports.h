@@ -16,7 +16,6 @@
 #include "mbedZlib.h"
 #include "utility.h"
 
-
 #define SD_ROOT "/SD/%d"
 
 #define COMPRESS_PREFIX ".gz"
@@ -25,7 +24,7 @@
 // #define REPROT_PREFIX "%Y-%m-%d-%H-%M"
 #define REPROT_PREFIX "%Y-%m-%d-%H-%M-%S"
 
-#define MAX_BUFFSIZE 512 //maximum b64 buffersize
+#define MAX_BUFFSIZE PROTO_MAX_BUF_SIZE //maximum b64 buffersize
 
 class SDCard
 {
@@ -38,6 +37,7 @@ public:
   bool file_exist(const char *filepath);
   bool dir_exist(const char *path);
   bool remove_file(const char *filepath);
+  bool remove_files_in_dir(const char *dir);
   std::vector<std::string> list_dir(const char *path);
   long file_size(const char *path);
   bool search_file(const char *path, const char *search_term, char *ouput);
@@ -63,6 +63,7 @@ public:
   bool check_missed_files(char *output);
   bool compress_file(const char *src, const char *dest, bool remove_file = true);
   bool write_reports(const char *file_path, DeviceData *devicedata);
+  bool remove_reports(void);
   std::string file_path_gen(void);
 
 private:

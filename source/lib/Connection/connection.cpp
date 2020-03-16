@@ -11,7 +11,7 @@ Connection::Connection(Modem *modem, const int device_id) : _modem(modem)
 {
     char *temp = new char[10];
     sprintf(temp, "%d", device_id);
-    strcat(_base_request_body, HTTP_DeviceID_PREFIX);
+    strcat(_base_request_body, HTTP_DEVICEID_PREFIX);
     strcat(_base_request_body, temp);
     delete[] temp;
 }
@@ -136,7 +136,7 @@ bool Connection::devicedata_generator(DeviceData *device_data, char *output)
     msg_encoded encoded_data = msg_encoded_default;
     // unsigned char b64_buffer[MAX_BUFFSIZE];
     unsigned char *b64_buffer = new unsigned char[MAX_BUFFSIZE]();
-    // add DeviceID
+    // add deviceid
     strcat(output, _base_request_body);
     strcat(output, "&");
 
@@ -149,6 +149,7 @@ bool Connection::devicedata_generator(DeviceData *device_data, char *output)
             // printf("b64_buffer: %s, b64_buffer: %d\r\n", b64_buffer, strlen(reinterpret_cast<const char*>((b64_buffer))));
             strcat(output, HTTP_DATA_PREFIX);
             strcat(output, reinterpret_cast<const char *>((b64_buffer)));
+            // printf("output: %s, size: %d\r\n", output, strlen(reinterpret_cast<const char*>((output))));
             result = true;
         }
     }
@@ -170,16 +171,20 @@ int Connection::send_device_data_http(const char *url, const char *body, int tim
     if (respond == HTTP_OK_RESPOND)
         return 1;
     else
+    {
+        printf("Failed Response: %s\r\n", respond.c_str());
         return 0;
+    }
 }
 
 int Connection::send_device_data(const char *url, const char *number, int connection_type, DeviceData *device_data, int timeout)
 {
     int result = 0;
-    char *body = new char[MAX_BUFFSIZE + 128]();
+    char *body = new char[MAX_BUFFSIZE]();
     if (devicedata_generator(device_data, body))
     {
         // printf("body: %s\r\n", body);
+        // printf("body_length: %d\r\n", strlen(body));
         // choose type of connection
         // 1:Network, 2:SMS, 3:Both
         switch (connection_type)
@@ -216,12 +221,12 @@ int Connection::send_device_data(const char *url, const char *number, int connec
     return result;
 }
 
-int Connection::upload_report(const char *url, unsigned char *base64_file, long size, int timeout)
+int Connection::upload_report(const char *url, unsigned char *base64_file, int timeout)
 {
     int result = 0;
-    char *temp = new char[64]();
+    char *temp = new char[32]();
     strcat(temp, _base_request_body);
-    strcat(temp, (const char *)"&report_data=\"");
+    strcat(temp, (const char *)"&file=\"");
     Utility::str_prepend(base64_file, temp);
     strcat((char *)base64_file, (const char *)"\"");
     // printf("body: %s\r\n", base64_file);
@@ -230,7 +235,7 @@ int Connection::upload_report(const char *url, unsigned char *base64_file, long 
     {
         std::string respond = _modem->http_post(url, (const char *)base64_file, strlen((const char *)base64_file), timeout);
         // printf("upload respond: %s\r\n", respond.c_str());
-        if (respond == HTTP_OK_RESPOND)
+        if (respond.find(HTTP_OK_RESPOND) != std::string::npos)
         {
             result = 1;
             break;
@@ -248,6 +253,7 @@ int Connection::check_connection(const char *url, int timeout)
     strcat(body, "&");
     strcat(body, HTTP_DATA_PREFIX);
     strcat(body, HTTP_PING);
+    // printf("PING url: %s, Body: %s\r\n", url, body);
     // std::string respond = _modem->http_post(url, body, strlen(body), timeout);
     std::string respond = _modem->http_get(url, timeout);
     // printf("PING Respond: %s\r\n------\r\n", respond.c_str());

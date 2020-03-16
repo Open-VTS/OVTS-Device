@@ -77,8 +77,8 @@ float Peripherals::read_battery_cap(void)
     double sum = 0;                 // sum of samples taken
     float voltage = 0.0;            // calculated voltage
     float output = 0.0;             //output value
-    const float battery_max = 4.20; //maximum voltage of battery_data
-    const float battery_min = 3.0;  //minimum voltage of battery_data before shutdown
+    const float battery_max = 4.20; //maximum voltage of battery
+    const float battery_min = 3.0;  //minimum voltage of battery before shutdown
     float division = 4.3;
     for (int i = 0; i < 1000; i++)
     {
@@ -136,15 +136,15 @@ time_t Peripherals::current_time(void)
 }
 
 Modem DeviceCore::modem(devicepins.modem_tx, devicepins.modem_rx, devicepins.modem_gps_tx, devicepins.modem_gps_rx, devicepins.modem_power, devicepins.modem_switch, MAX_HDOP_THRESHOLD);
-Connection DeviceCore::connection(&modem, DeviceID);
+Connection DeviceCore::connection(&modem, DEVICEID);
 IMU DeviceCore::imu(devicepins.I2C_SDA, devicepins.I2C_SCL);
 SDCard DeviceCore::sd(devicepins.sd_mosi, devicepins.sd_miso, devicepins.sd_clk, devicepins.sd_cs);
-DeviceReports DeviceCore::devicereports(&sd, DeviceID);
+DeviceReports DeviceCore::devicereports(&sd, DEVICEID);
 Peripherals DeviceCore::peripherals;
 mbed_error_ctx DeviceCore::error_ctx;
 mbed_fault_context_t DeviceCore::fault_ctx;
 
-DeviceCore::DeviceCore(void) : update_devicedata_thread(osPriorityNormal, UPDATE_DeviceDATA_THREAD_STACK),
+DeviceCore::DeviceCore(void) : update_devicedata_thread(osPriorityNormal, UPDATE_DEVICEDATA_THREAD_STACK),
                                communication_thread(osPriorityNormal, COMMUNICATE_THREAD_STACK),
                                update_gps_data_thread(osPriorityNormal, GPS_THREAD_STACK),
                                reports_handler_thread(osPriorityNormal, REPORTS_THREAD_STACK)
@@ -195,16 +195,13 @@ void DeviceCore::test()
     char buf[100];
     strftime(buf, sizeof(buf), "%y/%m/%d,%H:%M:%S", when);
     printf("Time: %s\r\n", buf);
-    
+    */
     printf("Relay On\r\n");
     peripherals.set_relay(true);
     wait(2);
     printf("Relay Off\r\n");
     peripherals.set_relay(false);
     printf("Input IO: %d\r\n", peripherals.read_input());
-    */
-    while (1)
-        ;
 }
 
 int DeviceCore::init(void)
@@ -215,7 +212,7 @@ int DeviceCore::init(void)
 #ifdef DEBUG_MEM
     debug_memory_thread.start(callback(this, &DeviceCore::debug_memory));
 #endif
-    init_timeout.attach(callback(this, &DeviceCore::init_timeout_func), INIT_TIMEOUT);
+    init_timeout.attach(callback(this, &DeviceCore::init_timeout_func), INIT_TIMEOUT * 1000);
     //setting event flags
     sleep_event.clear(SAMPLE_FLAG);
     if (!imu.init() && !imu.init())
@@ -226,67 +223,6 @@ int DeviceCore::init(void)
     }
     else
         imu_ready = true;
-    // intializing modem
-    modem.power_on();
-    wait(2);
-    // printf("725\r\n");
-    if (!modem.init_modem())
-    {
-        printf("Modem Initialization Failed\r\n");
-        peripherals.show_err(2);
-        return -2;
-    }
-
-    // delete inbox
-    modem.del_sms_all();
-
-    // test();
-    // retrieve params from sd/modem
-    retrieve_params();
-    // print_memory_info();
-    if (deviceparams.general_params.connection_type == 2)
-    {
-        // SMS MODE
-        //TODO: do proper work to alert center that Device turned on!
-    }
-    else
-    {
-        if (!modem.init_network())
-        {
-            printf("Setting Modem Network Failed\r\n");
-            peripherals.show_err(3);
-            return -3;
-        }
-        wait_ms(500);
-        for (int i = 0; i < INIT_MAX_RETRIES; i++)
-        {
-            if (modem.init_network_qiact())
-            {
-                break;
-            }
-            if (i == INIT_MAX_RETRIES - 1)
-            {
-                printf("Setting Modem Network QIACT Failed\r\n");
-                peripherals.show_err(4);
-                return -4;
-            }
-            wait(2);
-        }
-        wait(1);
-        printf("Checking Center...\r\n");
-        for (int j = 0; j < INIT_MAX_RETRIES; j++)
-        {
-            if (connection.check_connection(deviceparams.center_params.center_params.center_address.ping_url))
-                break;
-            if (j == INIT_MAX_RETRIES - 1)
-            {
-                printf("Center Connection ERROR\r\n");
-                peripherals.show_err(5);
-                return -5;
-            }
-            wait(5);
-        }
-    }
 
     // init devicereport
     if (!devicereports.init())
@@ -298,8 +234,76 @@ int DeviceCore::init(void)
     else
         sd_ready = 1;
 
+    // initializing modem
+    modem.power_on();
+    // modem.test();
+    // while (1)
+    //     ;
+
+    for (int i = 0; i < INIT_MAX_RETRIES; i++)
+    {
+        if (modem.init())
+            break;
+        if (i == INIT_MAX_RETRIES - 1)
+        {
+            printf("Modem Initialization Failed\r\n");
+            peripherals.show_err(2);
+            return -2;
+        }
+        wait(1);
+    }
+    // retrieve params from sd/modem
+    retrieve_params();
+
+    for (int i = 0; i < INIT_MAX_RETRIES; i++)
+    {
+        if (deviceparams.general_params.connection_type == 2)
+        {
+            //SMS MODE
+            //TODO: do proper work to alert center that Device turned on!
+        }
+        else
+        {
+            if (modem.init_network())
+            {
+                break;
+            }
+            if (i == INIT_MAX_RETRIES - 1)
+            {
+                printf("Setting Modem Network Failed\r\n");
+                peripherals.show_err(3);
+                return -4;
+            }
+            wait(1);
+        }
+    }
+
+    if (deviceparams.general_params.connection_type != 2)
+    {
+        printf("Checking Server...\r\n");
+        for (int j = 0; j < INIT_MAX_RETRIES; j++)
+        {
+            if (connection.check_connection(deviceparams.center_params.center_params.center_address.ping_url))
+                break;
+            if (j == INIT_MAX_RETRIES - 1)
+            {
+                printf("Server Connection ERROR\r\n");
+                peripherals.show_err(5);
+                return -5;
+            }
+            wait(5);
+        }
+    }
+
+    // delete inbox
+    modem.del_sms_all();
+
     //sync time
     sync_time();
+
+    // update modem params
+    get_modem_params();
+
     if (sd_ready)
     {
         //TODO: Fix this, if the directory get large it cant scan missed file
@@ -308,7 +312,7 @@ int DeviceCore::init(void)
         {
             if (deviceparams.general_params.connection_type != 2)
             {
-                printf("Sending missed file: %s\r\n", missed_file);
+                printf("Uploading missed file: %s\r\n", missed_file);
                 if (upload_report(missed_file))
                 {
                     printf("Report Upload OK!\r\n");
@@ -317,7 +321,7 @@ int DeviceCore::init(void)
 #endif
                 }
                 else
-                    printf("Missed File: %s Send Failed!\r\n", missed_file);
+                    printf("Missed File: %s Upload Failed!\r\n", missed_file);
             }
         }
         delete[] missed_file;
@@ -350,7 +354,7 @@ int DeviceCore::init(void)
     modem_queue->call_every(deviceparams.general_params.timer.network_receive * 1000, this, &DeviceCore::get_center_commands);
     modem_queue->call_every(1000, this, &DeviceCore::check_failed_requests);
     //sync local time with modem
-    modem_queue->call_every(MODEM_SYNC_TIME_INTERVAL, this, &DeviceCore::sync_time);
+    modem_queue->call_every(MODEM_SYNC_TIME_INTERVAL * 1000, this, &DeviceCore::sync_time);
     communication_thread.start(callback(modem_queue, &EventQueue::dispatch_forever));
     if (sd_ready)
         reports_handler_thread.start(callback(this, &DeviceCore::reports_handler));
@@ -375,7 +379,7 @@ int DeviceCore::read_center_params(DeviceMainParams *deviceparams)
     // check sd file config exists
     char *sd_config_path = new char[32];
     char *sd_config_file_data = new char[MAX_BUFFSIZE];
-    sprintf(sd_config_path, SD_ROOT, DeviceID);
+    sprintf(sd_config_path, SD_ROOT, DEVICEID);
     strcat(sd_config_path, "/");
     strcat(sd_config_path, SD_CONFIG_FILE);
     if ((sd_ready) && (sd.file_exist(sd_config_path)) && (sd.read_file_text(sd_config_path, sd_config_file_data, MAX_BUFFSIZE)))
@@ -403,7 +407,7 @@ int DeviceCore::read_center_params(DeviceMainParams *deviceparams)
         {
             //TODO: add key for validation
             // check validation of read data
-            if (center_commandsP->device_id == DeviceID)
+            if (center_commandsP->device_id == DEVICEID)
             {
                 decode_result = true;
                 // assign to center_params
@@ -427,7 +431,7 @@ int DeviceCore::read_center_params(DeviceMainParams *deviceparams)
                     deviceparams->general_params = center_commandsP->device_params;
             }
             else
-                printf("Key or DeviceID in config is not valid!!!, DeviceID Saved: %ld, Current: %d\r\n", center_commandsP->device_id, DeviceID);
+                printf("Key or DEVICEID in config is not valid!!!, DEVICEID Saved: %ld, Current: %d\r\n", center_commandsP->device_id, DEVICEID);
         }
     }
 
@@ -458,7 +462,7 @@ bool DeviceCore::write_center_params(DeviceMainParams *deviceparams)
     bool result = false;
     CenterCommands *center_commandsP = new CenterCommands();
     // prepare center_commandsP
-    center_commandsP->device_id = DeviceID;
+    center_commandsP->device_id = DEVICEID;
     strcpy(center_commandsP->set_center_params.key, deviceparams->center_params.key);
     strcpy(center_commandsP->set_center_params.center_params.center_address.device_data_url, deviceparams->center_params.center_params.center_address.device_data_url);
     strcpy(center_commandsP->set_center_params.center_params.center_address.center_commands_url, deviceparams->center_params.center_params.center_address.center_commands_url);
@@ -552,11 +556,16 @@ void DeviceCore::reports_handler(void)
         while (write_counter < REPORTS_SEND_COUNTER)
         {
             // wait for devicedata to become ready
-            DeviceData *_reportsP = new DeviceData(_devicedata);
+            // DeviceData *_reportsP = new DeviceData(_devicedata);
+            // create a small part data
+            DeviceData *_reportsP = new DeviceData();
+            _reportsP->device_id = _devicedata.device_id;
+            _reportsP->time = _devicedata.time;
+
             if (_reportsP->time - last_time >= REPORTS_WRITE_INTERVAL)
             {
                 last_time = _reportsP->time;
-                // fill location data
+                //fill location data
                 _reportsP->gps_data.lat = current_location->lat;
                 _reportsP->gps_data.lng = current_location->lng;
                 _reportsP->gps_data.speed = current_location->speed;
@@ -610,24 +619,26 @@ void DeviceCore::update_devicedata(void)
     {
         // printf("preparing devicedata\r\n");
         //clear device data event flag to command waiting for others
-        //setting default DeviceID
+        //setting default deviceid
         DeviceData *devicedataP = new DeviceData();
-        devicedataP->device_id = DeviceID;
+        devicedataP->device_id = DEVICEID;
         devicedataP->time = static_cast<int64_t>(peripherals.current_time());
-        // fill general data
-        // server params
+        // fill general datas
+        //server params
+
         strcpy(devicedataP->center_params.center_address.device_data_url, deviceparams.center_params.center_params.center_address.device_data_url);
         strcpy(devicedataP->center_params.center_address.center_commands_url, deviceparams.center_params.center_params.center_address.center_commands_url);
         strcpy(devicedataP->center_params.center_address.ping_url, deviceparams.center_params.center_params.center_address.ping_url);
         strcpy(devicedataP->center_params.center_address.device_report_url, deviceparams.center_params.center_params.center_address.device_report_url);
-        // center numbers
+        // phonenumbers
         strcpy(devicedataP->center_params.number1, deviceparams.center_params.center_params.number1);
         strcpy(devicedataP->center_params.number2, deviceparams.center_params.center_params.number2);
         strcpy(devicedataP->center_params.number3, deviceparams.center_params.center_params.number3);
-        // timers
+        //timers
         devicedataP->device_params.timer.network_receive = deviceparams.general_params.timer.network_receive;
         devicedataP->device_params.timer.network_send = deviceparams.general_params.timer.network_send;
         devicedataP->device_params.timer.sms_send = deviceparams.general_params.timer.sms_send;
+
         // data select
         devicedataP->device_params.data_select.battery_enable = deviceparams.general_params.data_select.battery_enable;
         devicedataP->device_params.data_select.gps_enable = deviceparams.general_params.data_select.gps_enable;
@@ -688,6 +699,7 @@ void DeviceCore::update_devicedata(void)
     }
 }
 
+#ifdef DEBUG_MEM
 void DeviceCore::print_memory_info()
 {
     // allocate enough room for every thread's stack statistics
@@ -697,7 +709,10 @@ void DeviceCore::print_memory_info()
     cnt = mbed_stats_stack_get_each(stats, cnt);
     for (int i = 0; i < cnt; i++)
     {
-        printf("Thread: 0x%lX, Stack size: %lu / %lu\r\n", stats[i].thread_id, stats[i].max_size, stats[i].reserved_size);
+        float utilization = ((float)stats[i].max_size / (float)stats[i].reserved_size) * 100;
+        // printf("Thread: 0x%lX, Stack size: %lu / %lu, %.1f\r\n", stats[i].thread_id, stats[i].max_size, stats[i].reserved_size, utilization);
+        if (utilization > MAX_MEM_UTIL)
+            printf("Thread Utilization Reached: 0x%lX, Stack size: %lu / %lu, %.1f\r\n", stats[i].thread_id, stats[i].max_size, stats[i].reserved_size, utilization);
     }
     free(stats);
 
@@ -706,6 +721,7 @@ void DeviceCore::print_memory_info()
     mbed_stats_heap_get(&heap_stats);
     printf("Heap size: %lu / %lu bytes\r\n", heap_stats.current_size, heap_stats.reserved_size);
 }
+#endif
 
 bool DeviceCore::upload_report(const char *file_path)
 {
@@ -714,7 +730,7 @@ bool DeviceCore::upload_report(const char *file_path)
     if (!size)
         return result;
     const int b64_size = Base64::encode_size(size);
-    const int http_params_size = 64;
+    const int http_params_size = 32;
     unsigned char *file_buffer = new unsigned char[size]();
     unsigned char *file_buffer_base64 = new unsigned char[b64_size + http_params_size]();
     int bytesRead = sd.read_file_binary(file_path, file_buffer, size);
@@ -728,7 +744,7 @@ bool DeviceCore::upload_report(const char *file_path)
             // printf("base64: %s\r\n", file_buffer_base64);
             // printf("size: %d\r\n", b64_size);
             //send file
-            if (connection.upload_report(deviceparams.center_params.center_params.center_address.device_report_url, file_buffer_base64, b64_size))
+            if (connection.upload_report(deviceparams.center_params.center_params.center_address.device_report_url, file_buffer_base64))
                 result = true;
         }
         else
@@ -788,7 +804,7 @@ void DeviceCore::send_device_data(void)
                                     deviceparams.general_params.connection_type, devicedataP))
     {
         fail_counter = 0;
-        // printf("loc: %f, %f, spd: %f, alt: %f, course: %f, hdop: %f\r\n", devicedataP->gps_data.lat, devicedataP->gps_data.lng, devicedataP->gps_data.speed, devicedataP->gps_data.altitude, devicedataP->gps_data.course, devicedataP->gps_data.hdop);
+        printf("loc: %f, %f, spd: %f, alt: %f, course: %f, hdop: %f\r\n", devicedataP->gps_data.lat, devicedataP->gps_data.lng, devicedataP->gps_data.speed, devicedataP->gps_data.altitude, devicedataP->gps_data.course, devicedataP->gps_data.hdop);
         printf("DeviceData Sent\r\n");
         peripherals.set_error(0);
     }
@@ -805,8 +821,10 @@ void DeviceCore::send_device_data(void)
 
 void DeviceCore::get_center_commands(void)
 {
-    // a flag to check if we have permenant deviceparams then save it on modem
+    // a flag to check if we have permenant deviceparsm then save it on modem
     bool has_new_device_params = false;
+    // a flag to hold result of new params
+    bool set_new_params_ok = false;
     modem_ready_mutex.lock();
     //wait for modem to become available
     // printf("getting center_commands\r\n");
@@ -823,13 +841,13 @@ void DeviceCore::get_center_commands(void)
         printf("New CenterCommand Received\r\n");
         peripherals.set_error(0);
         // printf("Center command get OK\r\n");
-        //TODO: do proper on invalid DeviceID
-        if (center_commandsP->device_id != DeviceID)
-            printf("Device ID IS NOT VALID\r\n");
+        //TODO: do proper on invalid deviceid
+        if (center_commandsP->device_id != DEVICEID)
+            printf("DEVICE ID IS NOT VALID\r\n");
         //set robparams for new _center_commands
         if (center_commandsP->has_device_params)
         {
-            has_new_device_params = true;
+            has_new_device_params = set_new_params_ok = true;
             printf("New device params\r\n");
             // printf("deviceparams.general_params.connection_type:%d\r\n", center_commandsP->device_params.connection_type);
             // printf("center_commandsP->device_params.data_select.battery_enable:%d\r\n", center_commandsP->device_params.data_select.battery_enable);
@@ -858,6 +876,17 @@ void DeviceCore::get_center_commands(void)
             printf("New relay value: %ld\r\n", center_commandsP->relay);
             peripherals.set_relay((center_commandsP->relay == 1) ? true : false);
             deviceparams.relay = center_commandsP->relay;
+
+            DeviceData *devicedataP = new DeviceData();
+            devicedataP->device_id = DEVICEID;
+            devicedataP->time = static_cast<int64_t>(peripherals.current_time());
+            strcpy(devicedataP->custom_field[0].key, ACK_KEY);
+            strcpy(devicedataP->custom_field[0].value, ACK_OK);
+            if (!connection.send_device_data(deviceparams.center_params.center_params.center_address.device_data_url,
+                                             deviceparams.center_params.center_params.number1,
+                                             deviceparams.general_params.connection_type, devicedataP))
+                printf("Send set new params failed!\r\n");
+            delete devicedataP;
         }
 
         // printf("has_set_center_params: %d\r\n", center_commandsP->has_set_center_params);
@@ -865,7 +894,7 @@ void DeviceCore::get_center_commands(void)
         {
             has_new_device_params = true;
             printf("New center_params\r\n");
-            // printf("has_center_address: %d\r\n", center_commandsP->set_center_params.center_params.has_center_address);
+            // printf("has_server_address: %d\r\n", center_commandsP->set_center_params.center_params.has_server_address);
             strcpy(deviceparams.center_params.key, center_commandsP->set_center_params.key);
             // read number1
             strcpy(deviceparams.center_params.center_params.number1, center_commandsP->set_center_params.center_params.number1);
@@ -882,13 +911,12 @@ void DeviceCore::get_center_commands(void)
                     strcpy(deviceparams.center_params.center_params.center_address.center_commands_url, center_commandsP->set_center_params.center_params.center_address.center_commands_url);
                     strcpy(deviceparams.center_params.center_params.center_address.ping_url, center_commandsP->set_center_params.center_params.center_address.ping_url);
                     strcpy(deviceparams.center_params.center_params.center_address.device_report_url, center_commandsP->set_center_params.center_params.center_address.device_report_url);
-                    printf("Center Address changed successfully!\r\n");
+                    printf("Server Address changed!\r\n");
                     // printf("Here: %s\r\n", deviceparams.center_params.center_params.center_address.device_data_url.c_str());
+                    set_new_params_ok = true;
                 }
                 else
-                {
-                    printf("Failed to change center address to: %s\r\n", center_commandsP->set_center_params.center_params.center_address.ping_url);
-                }
+                    printf("Failed to change server address to: %s\r\n", center_commandsP->set_center_params.center_params.center_address.ping_url);
             }
         }
         // Handle custom commands
@@ -901,6 +929,16 @@ void DeviceCore::get_center_commands(void)
                 if (strcmp(center_commandsP->custom_field[i].key, RESET_STR) == 0)
                 {
                     printf("Reseting System...\r\n");
+                    DeviceData *devicedataP = new DeviceData();
+                    devicedataP->device_id = DEVICEID;
+                    devicedataP->time = static_cast<int64_t>(peripherals.current_time());
+                    strcpy(devicedataP->custom_field[0].key, ACK_KEY);
+                    strcpy(devicedataP->custom_field[0].value, ACK_OK);
+                    if (!connection.send_device_data(deviceparams.center_params.center_params.center_address.device_data_url,
+                                                     deviceparams.center_params.center_params.number1,
+                                                     deviceparams.general_params.connection_type, devicedataP))
+                        printf("Send set new params failed!\r\n");
+                    delete devicedataP;
                     wait(1);
                     reboot();
                 }
@@ -910,8 +948,20 @@ void DeviceCore::get_center_commands(void)
                     long set_time_value = strtol(center_commandsP->custom_field[i].value, NULL, 0);
                     printf("Setting System Time to: %ld\r\n", set_time_value);
                     set_time(static_cast<time_t>(set_time_value));
+
+                    // prepare devicedata
+                    DeviceData *devicedataP = new DeviceData();
+                    devicedataP->device_id = DEVICEID;
+                    devicedataP->time = static_cast<int64_t>(peripherals.current_time());
+                    strcpy(devicedataP->custom_field[0].key, SET_TIME_STR);
+                    strcpy(devicedataP->custom_field[0].value, ACK_OK);
+                    if (!connection.send_device_data(deviceparams.center_params.center_params.center_address.device_data_url,
+                                                     deviceparams.center_params.center_params.number1,
+                                                     deviceparams.general_params.connection_type, devicedataP))
+                        printf("USSD Result Send failed!\r\n");
+                    delete devicedataP;
                 }
-                // execute USSD code
+                // execute ussd code
                 else if (strcmp(center_commandsP->custom_field[i].key, USSD_STR) == 0)
                 {
                     printf("New USSD Command: %s\r\n", center_commandsP->custom_field[i].value);
@@ -920,18 +970,49 @@ void DeviceCore::get_center_commands(void)
                     std::string res = modem.ussd(center_commandsP->custom_field[i].value);
                     printf("USSD result: %s\r\n", res.c_str());
                     // if result is empty fill with error
-                    if (res.empty())
-                        res = "Failed";
+                    if (res.empty() || (res.length() > USSD_MAX_LENGTH))
+                        res = ACK_ERR;
                     // prepare devicedata
-                    DeviceData *devicedata_p = new DeviceData((DeviceData)DeviceData_init_zero);
-                    strcpy(devicedata_p->custom_field[0].key, reinterpret_cast<const char *>(USSD_STR));
-                    strcpy(devicedata_p->custom_field[0].value, reinterpret_cast<const char *>(res.c_str()));
+                    DeviceData *devicedataP = new DeviceData();
+                    devicedataP->device_id = DEVICEID;
+                    devicedataP->time = static_cast<int64_t>(peripherals.current_time());
+                    strcpy(devicedataP->custom_field[0].key, USSD_STR);
+                    strcpy(devicedataP->custom_field[0].value, res.c_str());
                     if (!connection.send_device_data(deviceparams.center_params.center_params.center_address.device_data_url,
                                                      deviceparams.center_params.center_params.number1,
-                                                     deviceparams.general_params.connection_type, devicedata_p))
+                                                     deviceparams.general_params.connection_type, devicedataP))
                         printf("USSD Result Send failed!\r\n");
-                    // release modem
-                    delete devicedata_p;
+                    delete devicedataP;
+                }
+                // remove all reports in SD
+                else if (strcmp(center_commandsP->custom_field[i].key, ERASE_SD_STR) == 0)
+                {
+                    printf("Removing all reports in SD\r\n");
+                    DeviceData *devicedataP = new DeviceData();
+                    devicedataP->device_id = DEVICEID;
+                    devicedataP->time = static_cast<int64_t>(peripherals.current_time());
+                    strcpy(devicedataP->custom_field[0].key, ERASE_SD_STR);
+                    strcpy(devicedataP->custom_field[0].value, ((sd_ready && devicereports.remove_reports()) == true) ? ACK_OK : ACK_ERR);
+                    if (!connection.send_device_data(deviceparams.center_params.center_params.center_address.device_data_url,
+                                                     deviceparams.center_params.center_params.number1,
+                                                     deviceparams.general_params.connection_type, devicedataP))
+                        printf("Remove Reports Result Send failed!\r\n");
+                    delete devicedataP;
+                }
+                // read IMSI
+                else if (strcmp(center_commandsP->custom_field[i].key, READ_IMSI_STR) == 0)
+                {
+                    printf("Reading IMSI\r\n");
+                    DeviceData *devicedataP = new DeviceData();
+                    devicedataP->device_id = DEVICEID;
+                    devicedataP->time = static_cast<int64_t>(peripherals.current_time());
+                    strcpy(devicedataP->custom_field[0].key, READ_IMSI_STR);
+                    strcpy(devicedataP->custom_field[0].value, modem.read_imsi().c_str());
+                    if (!connection.send_device_data(deviceparams.center_params.center_params.center_address.device_data_url,
+                                                     deviceparams.center_params.center_params.number1,
+                                                     deviceparams.general_params.connection_type, devicedataP))
+                        printf("IMSI Result Send failed!\r\n");
+                    delete devicedataP;
                 }
             }
         }
@@ -942,22 +1023,58 @@ void DeviceCore::get_center_commands(void)
             // printf("Start: %d\r\n",  center_commandsP->device_sleep.start);
             // printf("end: %d\r\n",  center_commandsP->device_sleep.end);
             int interval = center_commandsP->device_sleep.end - center_commandsP->device_sleep.start;
+
+            DeviceData *devicedataP = new DeviceData();
+            devicedataP->device_id = DEVICEID;
+            devicedataP->time = static_cast<int64_t>(peripherals.current_time());
+            strcpy(devicedataP->custom_field[0].key, ACK_KEY);
+
             if (interval > SLEEP_THRESHOLD)
             {
                 sleep_params.start = center_commandsP->device_sleep.start;
                 sleep_params.end = center_commandsP->device_sleep.end;
+
+                strcpy(devicedataP->custom_field[0].value, ACK_OK);
+                if (!connection.send_device_data(deviceparams.center_params.center_params.center_address.device_data_url,
+                                                 deviceparams.center_params.center_params.number1,
+                                                 deviceparams.general_params.connection_type, devicedataP))
+                    printf("Send set new params failed!\r\n");
+                delete devicedataP;
+
                 // set event flag
                 sleep_event.set(SAMPLE_FLAG);
             }
+            else
+            {
+                strcpy(devicedataP->custom_field[0].value, ACK_ERR);
+                if (!connection.send_device_data(deviceparams.center_params.center_params.center_address.device_data_url,
+                                                 deviceparams.center_params.center_params.number1,
+                                                 deviceparams.general_params.connection_type, devicedataP))
+                    printf("Send set new params failed!\r\n");
+                delete devicedataP;
+            }
         }
-        //check new_device_params:
+        //check new_device_params
         if (has_new_device_params)
         {
             printf("Saving new params to modem!\r\n");
-            // delete old file
+            //delete old file
             modem.delete_file(CENTER_PARAMS_FILE);
-            // save new params to modem
+            //save new params to modem
             write_center_params(&deviceparams);
+            // send ACK to Server
+
+            DeviceData *devicedataP = new DeviceData();
+            devicedataP->device_id = DEVICEID;
+            devicedataP->time = static_cast<int64_t>(peripherals.current_time());
+            strcpy(devicedataP->custom_field[0].key, ACK_KEY);
+            strcpy(devicedataP->custom_field[0].value, (set_new_params_ok == true) ? ACK_OK : ACK_ERR);
+            if (!connection.send_device_data(deviceparams.center_params.center_params.center_address.device_data_url,
+                                             deviceparams.center_params.center_params.number1,
+                                             deviceparams.general_params.connection_type, devicedataP))
+                printf("Send set new params failed!\r\n");
+            delete devicedataP;
+
             wait(1);
             reboot();
         }
@@ -984,14 +1101,20 @@ void DeviceCore::get_center_commands(void)
 
 void DeviceCore::get_gps_data(void)
 {
-    const int default_value = -1;
+#ifdef FAKE_GPS
     srand(time(NULL));
+    size_t counter = 0;
+    std::vector<std::vector<float>> fake_locations = {{35.693054, 51.403663}, {35.692133, 51.403520}, {35.691601, 51.403407}, {35.691514, 51.404142}, {35.691479, 51.404786}, {35.692085, 51.404850}, {35.692773, 51.404888}, {35.693187, 51.404909}, {35.693213, 51.404292}, {35.693257, 51.403739}};
+#endif
+
     while (update_gps_data_thread_en)
     {
 #ifndef FAKE_GPS
+        const int default_value = -1;
         // loc = modem.get_gps_data_optimal(GET_GPS_DURATION, GET_GPS_COUNT);
-        // loc = modem.get_gps_data(GET_GPS_DURATION);
-        const gps_data loc = modem.get_gps_data_fix(current_location);
+        // const gps_data loc = modem.get_gps_data_fix(current_location);
+        const gps_data loc = modem.get_gps_data(GET_GPS_DURATION);
+        *current_location = loc;
         if ((loc.lat != default_value) || (loc.lng != default_value) ||
             (loc.speed != default_value) || (loc.altitude != default_value) ||
             (loc.course != default_value))
@@ -1015,15 +1138,29 @@ void DeviceCore::get_gps_data(void)
         }
 #else
         peripherals.set_gps(1);
-        int r = rand() % 10000;
-        float random = (float)r / 1000000.0;
+        // int r = rand() % 10000;
+        // float random = (float)r / 1000000.0;
         // printf("random: %d, %.6f\r\n", r, random);
-        _gps_data.lat = FAKE_GPS_LAT + random;
-        _gps_data.lng = FAKE_GPS_LNG + random;
-        _gps_data.speed = r / 100;
-        _gps_data.altitude = 1200;
-        _gps_data.course = 180;
-        _gps_data.hdop = 1.05;
+        // _gps_data.lat = 35.681068 + random;
+        // _gps_data.lng = 51.401755 + random;
+        // _gps_data.speed = r / 100;
+        // _gps_data.altitude = 1200;
+        // _gps_data.course = 180;
+        // _gps_data.hdop = 1.05;
+
+        if (counter >= fake_locations.size())
+            counter = 0;
+
+        current_location->lat = _gps_data.lat = fake_locations[counter][0];
+        current_location->lng = _gps_data.lng = fake_locations[counter][1];
+
+        current_location->speed = _gps_data.speed = 50;
+        current_location->altitude = _gps_data.altitude = 1200;
+        current_location->course = _gps_data.course = 180;
+        current_location->hdop = _gps_data.hdop = 1.05;
+        counter++;
+        wait(5);
+
 #endif
     }
 }
@@ -1108,6 +1245,7 @@ void DeviceCore::set_sleep(void)
     update_devicedata_thread.terminate();
     update_gps_data_thread.terminate();
     reports_handler_thread.terminate();
+    // check_memory_thread.terminate();
 #ifdef DEBUG_MEM
     debug_memory_thread.terminate();
 #endif
@@ -1150,7 +1288,15 @@ void DeviceCore::check_failed_requests(void)
 {
     if (fail_counter > COMMUNICATE_MAX_FAILS - 1)
     {
+#ifdef SWITCH_ON_FAILURE
+        printf("Switching to SMS Mode caused by %d failed requests!\r\n", COMMUNICATE_MAX_FAILS);
+        deviceparams.general_params.connection_type = 2;
+        modem.delete_file(CENTER_PARAMS_FILE);
+        //save new params to modem
+        write_center_params(&deviceparams);
+#else
         printf("Rebooting caused by %d failed requests!\r\n", COMMUNICATE_MAX_FAILS);
+#endif
         wait(1);
         reboot();
     }
@@ -1173,10 +1319,12 @@ void DeviceCore::sync_time(void)
     time_t now = 0;
     modem_ready_mutex.lock();
     if (deviceparams.general_params.connection_type == 2)
-        //simcard time
-        now = modem.current_time();
+    {
+    }
+    // simcard time
+    // now = modem.current_time();
     else
-        //api time
+        // api time
         now = current_time_api();
     modem_ready_mutex.unlock();
     if (now > 0)

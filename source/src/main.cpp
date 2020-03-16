@@ -40,7 +40,7 @@ int main()
     printf("\r\n");
     wait(2);
     DeviceCore::system_check();
-    printf("ID: %d\nVersion: %s\nUpload Time: %s %s\n", DeviceID, SOFTWARE_VER, DATE, TIME);
+    printf("ID: %d\nVersion: %s\nUpload Time: %s %s\n", DEVICEID, SOFTWARE_VER, DATE, TIME);
     timetime();
     if (DeviceCore.init() <= 0)
     {

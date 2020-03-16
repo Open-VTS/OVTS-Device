@@ -13,12 +13,11 @@
 #include "pb_encode.h"
 #include "OVTSProto.pb.h"
 
-
 #undef printf
 #define printf(a, ...) ser.printf(a, ##__VA_ARGS__)
 extern Serial ser; // tx, rx
 
-#define PROTO_MAX_BUF_SIZE 512
+#define PROTO_MAX_BUF_SIZE ((DeviceData_size > CenterCommands_size) ? DeviceData_size : CenterCommands_size)
 
 typedef struct
 {
@@ -39,9 +38,6 @@ public:
 private:
     void devicedata_en_tag(DeviceData *input);
     void center_commands_tag(CenterCommands *input);
-    
-
 };
-
 
 #endif

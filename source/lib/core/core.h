@@ -24,30 +24,27 @@
 #include "connection.h"
 #include "reports.h"
 
-// preprocessor to convert DeviceID to str
+// preprocessor to convert deviceid to str
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
 
-#define DeviceID 1
-#define SOFTWARE_VER "1.3.4"
+#define DEVICEID 1
+#define SOFTWARE_VER "1.1.0"
 #define DATE __DATE__
 #define TIME __TIME__
 
-// set for using custom APN
-//! Remember to change APN names in "modem.h"
-// #define USE_CUSTOM_APN
+// Set to 1 if you want to always overwrite DEFAULT_SERVER_PARAMS
+// #define SET_DEFAULT_PARAMS
 
 // set fake gps data
 // #define FAKE_GPS
 
 #ifdef FAKE_GPS
-#define FAKE_GPS_LAT 30.12345
-#define FAKE_GPS_LNG 45.12345
 #warning "FAKE GPS ENABLED!!!"
 #endif
 
 //del reports from sd for sent reports
-#define DELETE_COMPLETE_REPORTS
+// #define DELETE_COMPLETE_REPORTS
 
 //del sd config file after read
 #define DELETE_SD_CONFIG
@@ -57,12 +54,10 @@
 
 #ifdef DEBUG_MEM
 // debug memory interval
-#define DEBUG_MEM_INTERVAL 5
+#define DEBUG_MEM_INTERVAL 6
+// max memory Utilization percentage
+#define MAX_MEM_UTIL 85
 #endif
-
-// Set if you want to always override DEFAULT_CENTER_ADDRESS
-// (if set the center params would be locked to default value)
-#define SET_DEFAULT_PARAMS
 
 //SD FILE CONFIG FILE
 #define SD_CONFIG_FILE "config"
@@ -70,23 +65,23 @@
 // modem file names
 #define CENTER_PARAMS_FILE "centerparams.txt"
 
-// center connection type
-// 1: Network, 2: SMS, 3: Dual
+// connection_type
+// 1:Network, 2:sms, 3:dual
 #define CONNECTION_TYPE 1
 
 #define DEFAULT_KEY "MY_KEY"
 
-#define DEFAULT_CENTER_ADDRESS                                                                                                 \
-  {                                                                                                                            \
+#define DEFAULT_CENTER_ADDRESS                                                                                     \
+  {                                                                                                                \
     \                                                                                                                                 
-  "http://X.X.X.X:8080/device/data/",                                                                                      \
+  "http://X.X.X.X:8080/device/data/",                                                                              \
         "http://X.X.X.X:8080/device/commands/", "http://X.X.X.X:8080/device/reports/", "http://X.X.X.X:8080/ping/" \
   }
 
 #define TIME_API_URL "http://X.X.X.X:8080/device/time/"
 
-#define DEFAULT_CENTER_PARAMS                                                         \
-  {                                                                                   \
+#define DEFAULT_CENTER_PARAMS                                                       \
+  {                                                                                 \
     DEFAULT_KEY, { true, DEFAULT_CENTER_ADDRESS, "+123456789", true, "", true, "" } \
   }
 
@@ -95,54 +90,64 @@
     {SEND_RB_INTERVAL, GET_CC_INTERVAL, SEND_RB_SMS_INTERVAL}, {1, 1, 1, 1, 1, 1, 1}, CONNECTION_TYPE \
   }
 
-#define RESET_STR "Reset"
-#define SET_TIME_STR "SetTime"
+#define RESET_STR "RESET"
+#define SET_TIME_STR "SETTIME"
 #define USSD_STR "USSD"
+#define USSD_MAX_LENGTH 512
+#define ERASE_SD_STR "ERASESD"
+#define READ_IMSI_STR "IMSI"
+#define ACK_KEY "PARAMS"
+#define ACK_OK "OK"
+#define ACK_ERR "ERR"
 #define SAMPLE_FLAG (1UL << 0)
 
 // write reports interval
 // minimum is 1 (seconds)
 #define REPORTS_WRITE_INTERVAL 1
 // send reports counter (based on write interval)
-#define REPORTS_SEND_COUNTER 400
+#define REPORTS_SEND_COUNTER 300
 
-#define MAX_BUFFSIZE 1024 //maximum b64 buffersize
+#define MAX_BUFFSIZE PROTO_MAX_BUF_SIZE //maximum b64 buffersize
 
 // max timeout for init if timer reached and init failed it would reboot system
-#define INIT_TIMEOUT 300
+#define INIT_TIMEOUT 180
 
-#define ERR_WAIT 5 //wait error for led indicator
+#define ERR_WAIT 5 //wait error for led indiactor
 
 #define MODEM_PARAMS_INTERVAL 900 //set wait time to get modem params like sim balance,signal quality,etc (s)
 #define SD_LOG_INTERVAL 1         // interval for sd logs
 
 //modem sync time interval
-#define MODEM_SYNC_TIME_INTERVAL 900000
+#define MODEM_SYNC_TIME_INTERVAL 3600
 
 //online communication ratio calculate based on GET_CC_INTERVAL/SEND_RB_INTERVAL
-#define GET_CC_INTERVAL 60 //get center commands interval
+#define GET_CC_INTERVAL 5  //get center commands interval
 #define SEND_RB_INTERVAL 5 //send devicedata interval
 
-#define SEND_RB_SMS_INTERVAL 1800
+#define SEND_RB_SMS_INTERVAL 60
 
-#define INIT_MAX_RETRIES 5 //max retries to check connection to server
+#define INIT_MAX_RETRIES 20 //max retries to check connection to server
 
 // max retries that ends to a reboot (a Fix for CME ERROR 3815)
-#define COMMUNICATE_MAX_FAILS 5
+#define COMMUNICATE_MAX_FAILS 10
 
-#define GET_GPS_COUNT 3       //multiplier to get average on each get_gps_data_optimal
-#define GET_GPS_DURATION 1000 //duration for feed to get gps data (ms)
+// switch to SMS on Max failed request
+#define SWITCH_ON_FAILURE
+
+#define GET_GPS_COUNT 5       //multiplier to get average on each get_gps_data_optimal
+#define GET_GPS_DURATION 512  //duration for feed to get gps data (ms)
 #define MAX_HDOP_THRESHOLD 20 //max acceptable hdop
 
 // minimum sleep time allowed in seconds
-#define SLEEP_THRESHOLD 5
+#define SLEEP_THRESHOLD 60
 
 //definitions for threads stack size
 
-#define UPDATE_DeviceDATA_THREAD_STACK 1296
-#define COMMUNICATE_THREAD_STACK 3072
-#define GPS_THREAD_STACK 1536
-#define REPORTS_THREAD_STACK 2560
+#define UPDATE_DEVICEDATA_THREAD_STACK 1296
+#define COMMUNICATE_THREAD_STACK 3584
+#define GPS_THREAD_STACK 2048
+#define REPORTS_THREAD_STACK 3584
+// #define CHECK_MEMORY_THREAD_STACK 5192
 /*
 typedef struct
 {

@@ -9,7 +9,6 @@
 
 Serial ser(PA_9, PA_10); // tx, rx
 
-
 msg_encoded msg_encoded_default = {{0}, 0};
 
 // This function set has_field to true on each element if it is exist
@@ -22,8 +21,8 @@ void DeviceProto::devicedata_en_tag(DeviceData *input)
 
     //check loaction:
     if (input->gps_data.lat != 0 || input->gps_data.lng != 0 ||
-        input-> gps_data.speed != 0 || input-> gps_data.altitude != 0 ||
-        input-> gps_data.course !=0 || input -> gps_data.hdop !=0)
+        input->gps_data.speed != 0 || input->gps_data.altitude != 0 ||
+        input->gps_data.course != 0 || input->gps_data.hdop != 0)
         input->has_gps_data = true;
     // imu
     if (input->imu_data.ax != 0 || input->imu_data.ay != 0 || input->imu_data.az != 0)
@@ -93,7 +92,6 @@ bool DeviceProto::devicedata_encode(DeviceData *devicedata, msg_encoded *output)
             }
             //...
             */
-
         }
     }
     //setting param for custom_field (repeated field)
@@ -115,7 +113,8 @@ bool DeviceProto::devicedata_encode(DeviceData *devicedata, msg_encoded *output)
     return true;
 }
 
-bool DeviceProto::devicedata_decode(msg_encoded *input, DeviceData *output){
+bool DeviceProto::devicedata_decode(msg_encoded *input, DeviceData *output)
+{
     pb_istream_t stream = pb_istream_from_buffer(input->msg, input->length);
     if (!pb_decode(&stream, DeviceData_fields, output))
     {
@@ -125,7 +124,8 @@ bool DeviceProto::devicedata_decode(msg_encoded *input, DeviceData *output){
     return true;
 }
 
-void DeviceProto::center_commands_tag(CenterCommands *input){
+void DeviceProto::center_commands_tag(CenterCommands *input)
+{
     // device_params
     if (input->device_params.connection_type != 0)
         input->has_device_params = true;
@@ -146,18 +146,17 @@ void DeviceProto::center_commands_tag(CenterCommands *input){
         input->set_center_params.center_params.has_number3 = true;
 
     // device report
-    if (input->device_report.start !=0 || input->device_report.end != 0)
+    if (input->device_report.start != 0 || input->device_report.end != 0)
         input->has_device_report = true;
-    
+
     // device sleep
-    if (input->device_sleep.start !=0 || input->device_sleep.end != 0)
+    if (input->device_sleep.start != 0 || input->device_sleep.end != 0)
         input->has_device_sleep = true;
-    
+
     // relay
     if (input->relay != 0)
         input->has_relay = true;
 }
-
 
 // Encode center commands
 bool DeviceProto::center_commands_encode(CenterCommands *center_commands, msg_encoded *output)
@@ -196,7 +195,8 @@ bool DeviceProto::center_commands_encode(CenterCommands *center_commands, msg_en
     return true;
 }
 
-bool DeviceProto::center_commands_decode(msg_encoded *input, CenterCommands *output){
+bool DeviceProto::center_commands_decode(msg_encoded *input, CenterCommands *output)
+{
     pb_istream_t stream = pb_istream_from_buffer(input->msg, input->length);
     if (!pb_decode(&stream, CenterCommands_fields, output))
     {

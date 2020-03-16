@@ -25,17 +25,17 @@ OVTS-Device is the device application of [OVTS](https://github.com/Open-VTS) pro
 
 * Small Dimensions 80mm x 58mm x 6mm (HWD).
 * High processing power based on ARM Cortex-M4 STM32F407.
-* Communication over HTTP, SMS message and both (DUAL Mode).
+* Communication over HTTP/HTTPS, SMS message and both (DUAL Mode).
 * Internal reporting system.
 * Wide supply voltage range from 9V to 36V.
 * Nine-Axis (Gyro + Accelerometer + Compass) IMU sensor.
 * Built-in relay to turn on/off the vehicle or other devices.
 * Input voltage sensor to detect vehicle start mechanism.
 * Built-in RTC (Real Time Clock).
-* Builtin SDCard.
+* Built-in SDCard.
 * Built-in Lithium battery with onboard charger (lasts about 6 Hours).
 * Sleep mode to save power.
-* Audio Jack for sound communication (in progress).
+* Audio Jack for phone call (in progress).
 * Expansion onboard headers for further developments.
 * Totally open source based on ARM mbed framework.
 * Robust circuit and PCB design.
@@ -43,6 +43,7 @@ OVTS-Device is the device application of [OVTS](https://github.com/Open-VTS) pro
 * Work with GPS and AGPS (in progress).
 * Wide operating temperature -30~85 °C (may vary based on hardware components).
 * Works with a wide range of 3.7v Lithium Batteries (Lithium-polymer and Lithium-ion).
+* And many more features for functionality and reliability of the system.
 
 ## Hardware Specifications
 
@@ -73,7 +74,7 @@ For a basic setup you need at least one working device and the [OVTS-Server](htt
 * GPS Active Antenna.
 * CR1220 Coin battery.
 * A Dedicated Server.
-* An SD Card (if you need reports).
+* An SD Card (if you need offline reports).
 * A working Micro Sim Card.
 * The Server App hosted in the network.
 
@@ -84,9 +85,10 @@ For a basic setup you need at least one working device and the [OVTS-Server](htt
 3. Power on the board and the Power LED should turn on.
 4. Edit Server parameters and APN names in both `core.h` and `modem.h` .
    1. Set `DEFAULT_CENTER_ADDRESS` for server address and set center numbers in `DEFAULT_CENTER_PARAMS`.
-   2. Currently, there are two APN names have been defined in `modem.h` which are `OP_MTN` and `OP_MCI`. You need to first find out Your APN name string and add them like the template. For example `OP_MTN` string would be `MTN Irancell` and the equivalent APN name (which must be set to access internet connection) is `mtnirancell`. Also, if you have a custom APN name you need to add it as `OP_***_CUSTOM_APN` and set the `USE_CUSTOM_APN` in `core.h`.
-5. Compile and upload source to the board using [compile section](#Compile-Source-Code)
-6. If everything works fine, the Status LED should blink. Also, I suggest you to use the debug cable to see the current output.
+   2. Currently, there are two APN names have been defined in `modem.h` which are `OP_MTN` and `OP_MCI`. You need to first find out your APN name string and add them like the template. For example `OP_MTN` string would be `MTN Irancell` and the equivalent APN name is `mtnirancell`. Also, if you have a custom APN name you need to add it as `OP_***_CUSTOM_APN` and set the `USE_CUSTOM_APN` in `core.h`. Filling these values helps the modem to recognize the current network and call proper parameters to set parameters for each network operator.
+5. If the server communicates over HTTPS you need to set `USE_HTTPS` in `modem.h` and set the proper server address in `core.h`.
+6. Compile and upload source to the board using [compile section](#Compile-Source-Code)
+7. If everything works fine, the Status LED should blink. Also, I suggest you to use the debug cable to see the current output.
 
 ### Compile Source Code
 
@@ -115,7 +117,6 @@ The workspace is compatible with VSCode and has the ability to directly compile 
 
 ## TODO
 
-* Add more secure protocols like HTTPS.
 * Add request report file and remove auto send the report on device.
 * Improve source code and documentation.
 * A 3D printed layout box for the device.

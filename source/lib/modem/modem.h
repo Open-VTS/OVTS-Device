@@ -8,37 +8,42 @@
 #ifndef modem_h
 #define modem_h
 
-//set if use standalone mode
+// set if use standalone mode
 #define STAND_ALONE
 
 #include "mbed.h"
 #include "string"
-#include "vector"
 #include "TinyGPS++.h"
 #include "platform\ATCmdParser.h"
 #include "drivers\UARTSerial.h"
+#include "vector"
 
+// set to use https instead of http
+// #define USE_HTTPS
 // set minimum chunk to post large bodies
 #define HTTP_POST_SIZE_LIMIT 512
 // HTTP chunk size for large buffers
 #define HTTP_POST_CHUNK 256
 #define CHUNK_DELAY 512
-#define receive_timeout 10  //timeout for receiving answer from modem_serial module seconds
-#define max_buffer_size 512 //max buffer size for reading modem serial
-#define default_timeout 2000
+#define max_buffer_size 512       // max buffer size for reading modem serial
+#define wait_response wait_ms(30) // maximum wait time for respond a command
+#define parser_default_timeout 1500
 #define MODEM_ERR "ERROR"
 #define MODEM_NETWORK_ERROR "+CME ERROR"
 #define MODEM_SMS_ERROR "+CMS ERROR"
 
-//irancell
+// Irancell
 #define OP_MTN "MTN Irancell"
 #define OP_MTN_APN "mtnirancell"
 #define OP_MTN_CUSTOM_APN "myCustomAPN"
 
-// mci
+// IR MCI
 #define OP_MCI "MCI"
 #define OP_MCI_APN "mcinet"
 #define OP_MCI_CUSTOM_APN ""
+
+// OK resp
+#define OK "OK\r\n"
 
 // OP undefined
 #define OP_ERR ""
@@ -70,6 +75,8 @@ public:
     ~Modem();
     void power_on(void);
     void power_off(void);
+    void reboot(void);
+    void soft_reboot(void);
     std::string readSerial(void);
     void flush(void);
     bool set_params(void);
@@ -82,17 +89,21 @@ public:
     bool send_sms(const char *number, const char *msg);
     std::string ussd(const char *code, int timeout = 5000);
     int balance(void);
+    std::string read_imsi(void);
+
     bool set_apn(void);
     // this command wait for modem until get sms ready
-    bool init_modem(void);
+    bool init(void);
+    bool reinit(void);
     bool set_operator(void);
 
     //check gsm network status
-    bool check_gsm_status(void);
+    bool check_gsm_status();
+    bool check_sim_status(void);
     bool init_network(void);
-    bool init_network_qiact(int timeout = 5000);
-    bool init_network_qideact(int timeout = 10000);
+    bool init_network_qideact(int timeout = 15000);
     int get_signal_quality(void);
+    bool config_https(void);
     //HTTP
     std::string http_get(const char *url, int timeout);
     std::string http_post(const char *url, const char *body, int blen, int timeout);
@@ -110,17 +121,12 @@ public:
     gps_data get_gps_data_fix(gps_data *loc = NULL);
     std::string get_nmea(void);
 
-    std::string read_until(const char *value, int timeout);
-    inline std::string read_until() { return read_until("OK", 1000); }
-    inline std::string read_until(const char *value) { return read_until(value, 1000); }
-
-    bool check_for_respond(const char *resp, int timeout);
-    inline bool check_for_respond(const char *resp) { return check_for_respond(resp, 1000); }
-    inline bool check_for_respond() { return check_for_respond("OK", 1000); }
-
-    bool check_for_respond_fragmented(const char *resp, int timeout);
-    int read_until_forever(const char *value, const char *error = MODEM_NETWORK_ERROR, float read_until_forever_timeout = 180.0f);
-
+    std::string read_until(const char *value = OK, int timeout = 1000);
+    int check_for_respond_w_err(const char *resp = OK, const char *error = MODEM_ERR, int timeout = 2000);
+    bool check_for_respond(const char *resp = OK, int timeut = 2000);
+    bool check_for_respond(int timeout) { return check_for_respond(OK, timeout); }
+    void test(void);
+    void test_socket(void);
     // get gsm time
     time_t current_time(void);
 
@@ -130,6 +136,7 @@ public:
     std::string read_until_GPS(const char *value, int timeout);
 #endif
 private:
+    bool hasEnding(std::string const &fullString, std::string const &ending);
     // current operator name
     // maximum value for acceptable hdop
     double _hdop_threshold;

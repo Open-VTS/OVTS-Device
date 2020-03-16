@@ -89,6 +89,29 @@ bool SDCard::remove_file(const char *filepath)
         return false;
 }
 
+bool SDCard::remove_files_in_dir(const char *path)
+{
+    DIR *dir;
+    struct dirent *ent;
+    bool res = false;
+    char *path_to_remove = new char[32]();
+    if (dir_exist(path) && ((dir = opendir(path)) != NULL))
+    {
+        while ((ent = readdir(dir)) != NULL)
+        {
+            strcat(path_to_remove, path);
+            strcat(path_to_remove, "/");
+            strcat(path_to_remove, ent->d_name);
+            remove_file(path_to_remove);
+            memset(path_to_remove, 0, sizeof(path_to_remove));
+        }
+        closedir(dir);
+        res = true;
+    }
+    delete[] path_to_remove;
+    return res;
+}
+
 bool SDCard::search_file(const char *path, const char *search_term, char *output)
 {
     bool result = false;
@@ -287,4 +310,9 @@ bool DeviceReports::write_reports(const char *file_path, DeviceData *devicedata)
     }
     delete[] b64_buffer;
     return result;
+}
+
+bool DeviceReports::remove_reports(void)
+{
+    return _sd->remove_files_in_dir(device_main_directory);
 }
