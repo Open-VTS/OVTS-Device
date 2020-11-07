@@ -126,6 +126,7 @@ bool Modem::check_gsm_status(void)
     std::string resp = read_until();
     if ((resp.find("+CGREG: 0,1") != std::string::npos) || (resp.find("+CGREG: 0,5") != std::string::npos))
         return true;
+    return false;
 }
 
 bool Modem::check_sim_status(void)
